@@ -6,6 +6,6 @@ self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Pr
 // сеть сначала (чтобы обновления приходили), кэш — если интернета нет
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
-  if (u.origin !== location.origin || e.request.method !== 'GET') return;
+  if (u.origin !== location.origin || e.request.method !== 'GET' || /\.apk$|version\.json$/.test(u.pathname)) return;
   e.respondWith(fetch(e.request).then(r => { const c = r.clone(); caches.open(V).then(x => x.put(e.request, c)); return r; }).catch(() => caches.match(e.request)));
 });

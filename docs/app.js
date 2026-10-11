@@ -644,6 +644,8 @@ function settingsSheet() {
     <button class="btn full" id="sImpB" style="margin-top:8px">📥 Импортировать</button>
     <h3>Сброс</h3>
     <button class="btn danger full" id="sReset">Вернуть встроенные рецепты</button>
+    <h3>Приложение</h3>
+    <p class="small">Сайт: <a href="${SITE}" target="_blank" rel="noopener" style="color:var(--accent)">${SITE.replace('https://', '')}</a><br>Android: <a href="${SITE}apk/Esurio.apk" target="_blank" rel="noopener" style="color:var(--accent)">скачать последнюю APK</a></p>
     <p class="muted small" style="text-align:center;margin-top:16px">Esurio v${APP_VERSION}</p>`, () => {
       document.querySelectorAll('#sheet [data-me]').forEach(b => b.onclick = () => { S.me = b.dataset.me; save(true); settingsSheet(); render(); });
       document.querySelectorAll('#sheet [data-ck]').forEach(b => b.onclick = () => { const [d, id] = b.dataset.ck.split(':'); S.cook[d] = id; mark('cfg:cook'); save(); settingsSheet(); render(); });
@@ -674,6 +676,16 @@ function settingsSheet() {
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
 const APP_VERSION = '1.2';
+const SITE = 'https://metulaimmensa.github.io/esurio/';
+// в APK раз в запуск проверяем, не вышла ли новая версия на сайте
+async function checkUpdate() {
+  if (!isNative) return;
+  try {
+    const v = await (await fetch(SITE + 'version.json?t=' + Date.now(), { cache: 'no-store' })).json();
+    const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+    if (newer(v.version, APP_VERSION)) openSheet(`<h2>Вышла Esurio ${esc(v.version)}</h2><p class="muted">${esc(v.notes || '')}</p><a class="btn pri full" href="${SITE + v.apk}" target="_blank" rel="noopener">Скачать APK</a><button class="btn full" style="margin-top:8px" id="updLater">Потом</button>`, () => { $('#updLater').onclick = closeSheet; });
+  } catch (e) { }
+}
 const Sync = (() => {
   const repo = 'metulaimmensa/esurio-data', path = 'state.json', TK = 'esurio.token';
   let busy = false, again = false, timer = null, last = null, err = '';
@@ -862,7 +874,7 @@ if (Cap && isNative) {
 setTab('recipes');
 renderTimers();
 Sync.setStatus();
-if (!S.me) whoSheet(true);
+if (!S.me) whoSheet(true); else setTimeout(checkUpdate, 3000);
 Sync.run();
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Sync.run(); });
 setInterval(() => { if (document.visibilityState === 'visible') Sync.run(); }, 45000);
