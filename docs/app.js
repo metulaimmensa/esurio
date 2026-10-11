@@ -645,7 +645,7 @@ function settingsSheet() {
     <h3>Сброс</h3>
     <button class="btn danger full" id="sReset">Вернуть встроенные рецепты</button>
     <h3>Приложение</h3>
-    <p class="small">Сайт: <a href="${SITE}" target="_blank" rel="noopener" style="color:var(--accent)">${SITE.replace('https://', '')}</a><br>Android: <a href="${SITE}apk/Esurio.apk" target="_blank" rel="noopener" style="color:var(--accent)">скачать последнюю APK</a></p>
+    <p class="small">Сайт: <a href="${SITE}docs/" target="_blank" rel="noopener" style="color:var(--accent)">${SITE.replace('https://', '')}</a><br>Android: <a href="${SITE}docs/apk/Esurio.apk" target="_blank" rel="noopener" style="color:var(--accent)">скачать последнюю APK</a></p>
     <p class="muted small" style="text-align:center;margin-top:16px">Esurio v${APP_VERSION}</p>`, () => {
       document.querySelectorAll('#sheet [data-me]').forEach(b => b.onclick = () => { S.me = b.dataset.me; save(true); settingsSheet(); render(); });
       document.querySelectorAll('#sheet [data-ck]').forEach(b => b.onclick = () => { const [d, id] = b.dataset.ck.split(':'); S.cook[d] = id; mark('cfg:cook'); save(); settingsSheet(); render(); });

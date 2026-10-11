@@ -4,7 +4,7 @@
 
 Рецепты, план питания на неделю на двоих, склад и список покупок.
 
-- **Веб-версия:** https://metulaimmensa.github.io/esurio/ — на айфоне: «Поделиться» → «На экран Домой».
+- **Веб-версия:** https://metulaimmensa.github.io/esurio/ (открывает приложение из папки docs) — на айфоне: «Поделиться» → «На экран Домой».
 - **Android:** APK в разделе [Releases](https://github.com/metulaimmensa/esurio/releases).
 
 ## Что внутри
