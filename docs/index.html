@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#16130f">
+<title>Esurio</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Esurio">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <button id="backBtn" class="icon hidden" aria-label="Назад">←</button>
+  <h1 id="title">Рецепты</h1>
+  <span id="syncDot" class="muted" aria-live="polite"></span>
+  <button id="settingsBtn" class="icon" aria-label="Настройки">⚙</button>
+</header>
+
+<main id="view"></main>
+
+<div id="timerBar"></div>
+<div id="toast"></div>
+<div id="sheet" class="hidden"><div class="sheet-bg"></div><div class="sheet-body"></div></div>
+
+<nav id="tabs">
+  <button data-tab="recipes" class="on"><span>📖</span>Рецепты</button>
+  <button data-tab="plan"><span>📅</span>План</button>
+  <button data-tab="shop"><span>🛒</span>Покупки</button>
+  <button data-tab="pantry"><span>🧺</span>Склад</button>
+</nav>
+
+<script src="vendor/capacitor.js"></script>
+<script src="vendor/local-notifications.js"></script>
+<script src="vendor/haptics.js"></script>
+<script src="recipes.js"></script>
+<script src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !(window.capacitorExports && window.capacitorExports.Capacitor.isNativePlatform())) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

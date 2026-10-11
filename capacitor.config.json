@@ -1,0 +1,8 @@
+{
+  "appId": "com.sergei.kitchen",
+  "appName": "Esurio",
+  "webDir": "docs",
+  "android": {
+    "backgroundColor": "#16130f"
+  }
+}
