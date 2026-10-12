@@ -162,7 +162,6 @@ VIEWS.recipes = {
       (!filters.q || (r.title + ' ' + r.tags.join(' ') + ' ' + (r.cuisine || '') + ' ' + r.ing.map(ingName).join(' ') + ' ' + (r.variants || []).flatMap(v => (v.ing || []).map(ingName)).join(' ')).toLowerCase().includes(filters.q.toLowerCase())) &&
       (!filters.type || r.type === filters.type) &&
       (!filters.cuisine || r.cuisine === filters.cuisine) &&
-      (!filters.have || missing(r).length <= 2) &&
       (!filters.diff || r.difficulty === filters.diff) &&
       (!filters.maxTime || r.time <= filters.maxTime));
     list.sort((a, b) => (filters.have ? missing(a).length - missing(b).length : 0) || a.title.localeCompare(b.title, 'ru'));
@@ -183,8 +182,8 @@ VIEWS.recipes = {
         ${[1, 2, 3].map(d => `<button class="chip ${filters.diff === d ? 'on' : ''}" data-diff="${d}">${diffDots(d)} ${DIFF[d]}</button>`).join('')}
         ${[20, 30, 45].map(t => `<button class="chip ${filters.maxTime === t ? 'on' : ''}" data-time="${t}">≤ ${t} мин</button>`).join('')}
       </div>
-      ${filters.have ? `<div class="muted small" style="margin:2px 0 6px">Блюда, для которых по складу есть всё или не хватает 1–2 продуктов. Соль, масло и «по желанию» не считаются.</div>` : ''}
-      ${list.length ? list.map(rCard).join('') : filters.have ? `<div class="empty"><div class="big">🧺</div>Склад пустой — отметь, что есть дома, во вкладке «Склад».</div>` : `<div class="empty"><div class="big">🤷</div>Ничего не нашлось. Сам виноват, фильтры твои.</div>`}
+      ${filters.have ? `<div class="muted small" style="margin:2px 0 6px">Сначала то, на что всё есть, дальше по числу недостающих продуктов. Соль, масло и «по желанию» не считаются.</div>` : ''}
+      ${filters.have && list.length ? (() => { const word = n => n === 0 ? '✓ Всё есть' : `Не хватает ${n} ${n === 1 ? 'продукта' : 'продуктов'}`; let prev = -1; return list.map(r => { const n = missing(r).length; const h = n !== prev ? `<h2 style="margin:16px 0 4px;font-size:15px;color:${n ? 'var(--accent)' : 'var(--ok)'}">${word(n)}</h2>` : ''; prev = n; return h + rCard(r); }).join(''); })() : list.length ? list.map(rCard).join('') : filters.have ? `<div class="empty"><div class="big">🧺</div>Склад пустой — отметь, что есть дома, во вкладке «Склад».</div>` : `<div class="empty"><div class="big">🤷</div>Ничего не нашлось. Сам виноват, фильтры твои.</div>`}
       <button class="btn full" id="newRecipe" style="margin-top:12px">＋ Новый рецепт</button>`;
   },
   bind() {
@@ -691,7 +690,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
