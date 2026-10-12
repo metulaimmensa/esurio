@@ -17,6 +17,7 @@ for r in map(compute, load()):
     x['tips'] = [[t, r[k]] for k, t in TIP_KEYS if r.get(k)]
     if r.get('src'): x['src'] = r['src']
     if r.get('pick_one'): x['pick_one'] = True
+    if r.get('default_vars'): x['default_vars'] = r['default_vars']
     if r.get('variants'):
         x['variants'] = [{k: v[k] for k in ('name', 'ing', 'minus', 'note', 'dkcal', 'dp', 'df', 'dc') if k in v} for v in r['variants']]
     for i in x['ing'] + [j for v in x.get('variants', []) for j in v['ing']]:

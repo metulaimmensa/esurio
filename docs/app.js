@@ -93,7 +93,7 @@ const ingName = i => i[0], ingAmt = i => +i[1] || 0, ingUnit = i => i[2] || '', 
 
 /* ---- варианты: pick_one — ровно один на выбор, иначе — добавки по желанию ---- */
 const hasVars = r => !!(r && r.variants && r.variants.length);
-const defaultVars = r => (r && r.pick_one && hasVars(r)) ? [0] : [];
+const defaultVars = r => (r && r.default_vars) ? r.default_vars.slice() : (r && r.pick_one && hasVars(r)) ? [0] : [];
 function cleanVars(r, vars) { const v = (vars || []).filter(i => hasVars(r) && r.variants[i]); return (r && r.pick_one && hasVars(r) && !v.length) ? [0] : v; }
 function effIng(r, vars) {
   const vs = cleanVars(r, vars).map(i => r.variants[i]);
@@ -106,6 +106,12 @@ function effNut(r, vars) {
   const t = { kcal: r.kcal, p: r.p, f: r.f, c: r.c };
   cleanVars(r, vars).forEach(i => { const v = r.variants[i]; t.kcal += v.dkcal || 0; t.p += v.dp || 0; t.f += v.df || 0; t.c += v.dc || 0; });
   return t;
+}
+// чего не хватает для блюда по складу (без базовых, без «по желанию», без воды)
+function missing(r, vars) {
+  const out = new Set();
+  for (const i of effIng(r, vars || defaultVars(r))) { const o = ingOpt(i), n = canon(ingName(i)); if (o.staple || o.opt || n === 'Вода') continue; if (!have(n)) out.add(n); }
+  return [...out];
 }
 const varLabel = (r, vars) => cleanVars(r, vars).map(i => r.variants[i].name).join(', ');
 function toggleVar(r, vars, i) {
@@ -122,7 +128,7 @@ function varChips(r, vars, attr) {
 /* ================= Навигация ================= */
 let tab = 'recipes';
 const stack = []; // [{view, arg}]
-const filters = { q: '', type: '', cuisine: '', diff: 0, maxTime: 0 };
+const filters = { q: '', type: '', cuisine: '', diff: 0, maxTime: 0, have: false };
 
 function go(view, arg, push = true) {
   if (push) stack.push({ view, arg });
@@ -156,14 +162,18 @@ VIEWS.recipes = {
       (!filters.q || (r.title + ' ' + r.tags.join(' ') + ' ' + (r.cuisine || '') + ' ' + r.ing.map(ingName).join(' ')).toLowerCase().includes(filters.q.toLowerCase())) &&
       (!filters.type || r.type === filters.type) &&
       (!filters.cuisine || r.cuisine === filters.cuisine) &&
+      (!filters.have || missing(r).length <= 2) &&
       (!filters.diff || r.difficulty === filters.diff) &&
       (!filters.maxTime || r.time <= filters.maxTime));
-    list.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+    list.sort((a, b) => (filters.have ? missing(a).length - missing(b).length : 0) || a.title.localeCompare(b.title, 'ru'));
     return `
       <input id="q" placeholder="Поиск: название, продукт, тег…" value="${esc(filters.q)}">
       <div class="chips" style="margin-top:8px">
         <button class="chip ${!filters.type ? 'on' : ''}" data-type="">Все</button>
         ${usedTypes.map(t => `<button class="chip ${filters.type === t ? 'on' : ''}" data-type="${t}">${t}</button>`).join('')}
+      </div>
+      <div class="chips">
+        <button class="chip ${filters.have ? 'on' : ''}" id="haveF">🧺 Всё есть</button>
       </div>
       <div class="chips">
         <button class="chip ${!filters.cuisine ? 'on' : ''}" data-cuisine="">🌍 Все кухни</button>
@@ -173,13 +183,15 @@ VIEWS.recipes = {
         ${[1, 2, 3].map(d => `<button class="chip ${filters.diff === d ? 'on' : ''}" data-diff="${d}">${diffDots(d)} ${DIFF[d]}</button>`).join('')}
         ${[20, 30, 45].map(t => `<button class="chip ${filters.maxTime === t ? 'on' : ''}" data-time="${t}">≤ ${t} мин</button>`).join('')}
       </div>
-      ${list.length ? list.map(rCard).join('') : `<div class="empty"><div class="big">🤷</div>Ничего не нашлось. Сам виноват, фильтры твои.</div>`}
+      ${filters.have ? `<div class="muted small" style="margin:2px 0 6px">Блюда, для которых по складу есть всё или не хватает 1–2 продуктов. Соль, масло и «по желанию» не считаются.</div>` : ''}
+      ${list.length ? list.map(rCard).join('') : filters.have ? `<div class="empty"><div class="big">🧺</div>Склад пустой — отметь, что есть дома, во вкладке «Склад».</div>` : `<div class="empty"><div class="big">🤷</div>Ничего не нашлось. Сам виноват, фильтры твои.</div>`}
       <button class="btn full" id="newRecipe" style="margin-top:12px">＋ Новый рецепт</button>`;
   },
   bind() {
     const q = $('#q');
     q.oninput = () => { filters.q = q.value; const pos = q.selectionStart; render(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
     document.querySelectorAll('[data-type]').forEach(b => b.onclick = () => { filters.type = b.dataset.type; render(); });
+    $('#haveF').onclick = () => { filters.have = !filters.have; render(); };
     document.querySelectorAll('[data-cuisine]').forEach(b => b.onclick = () => { filters.cuisine = b.dataset.cuisine; render(); });
     document.querySelectorAll('[data-diff]').forEach(b => b.onclick = () => { const d = +b.dataset.diff; filters.diff = filters.diff === d ? 0 : d; render(); });
     document.querySelectorAll('[data-time]').forEach(b => b.onclick = () => { const t = +b.dataset.time; filters.maxTime = filters.maxTime === t ? 0 : t; render(); });
@@ -197,7 +209,7 @@ function rCard(r) {
         <span class="b">⏱ ${fmtDur(r.time)}</span>
         <span class="b">🔥 ${r.kcal}${hasVars(r) && r.pick_one ? '+' : ''} ккал</span>
         <span class="b diff" title="${DIFF[r.difficulty]}">${diffDots(r.difficulty)}</span>
-      </div></div></button></div>`;
+      </div>${filters.have ? (m => `<div class="small" style="margin-top:4px;color:${m.length ? 'var(--accent)' : 'var(--ok)'}">${m.length ? 'не хватает: ' + esc(m.join(', ')) : '✓ всё есть'}</div>`)(missing(r)) : ''}</div></button></div>`;
 }
 
 /* ================= Экран: рецепт ================= */
@@ -575,7 +587,7 @@ function pickRecipeSheet(day, slot) {
   const rs = allRecipes().sort((a, b) => (pref.includes(b.type) - pref.includes(a.type)) || a.title.localeCompare(b.title, 'ru'));
   let q = '';
   const mine = r => Math.round(r.kcal * S.settings.people * share);
-  const list = () => rs.filter(r => !q || (r.title + ' ' + (r.cuisine || '')).toLowerCase().includes(q)).map(r => `<div class="item" data-pick="${r.id}"><span style="font-size:26px">${esc(r.emoji)}</span><div class="grow">${esc(r.title)}<div class="muted small">${esc(r.type)} · ${esc(r.cuisine || '')} · ${fmtDur(r.time)} · тебе ≈${mine(r)}${hasVars(r) && r.pick_one ? '+' : ''} ккал</div></div>${mine(r) <= left ? '<span style="color:var(--ok)">✓</span>' : ''}</div>`).join('');
+  const list = () => rs.filter(r => !q || (r.title + ' ' + (r.cuisine || '')).toLowerCase().includes(q)).map(r => `<div class="item" data-pick="${r.id}"><span style="font-size:26px">${esc(r.emoji)}</span><div class="grow">${esc(r.title)}<div class="muted small">${esc(r.type)} · ${esc(r.cuisine || '')} · ${fmtDur(r.time)} · тебе ≈${mine(r)}${hasVars(r) && r.pick_one ? '+' : ''} ккал</div></div>${missing(r).length === 0 ? '<span title="всё есть дома">🧺</span>' : ''}${mine(r) <= left ? '<span style="color:var(--ok)">✓</span>' : ''}</div>`).join('');
   const bindList = () => document.querySelectorAll('#sheet [data-pick]').forEach(b => b.onclick = () => {
     const r = getRecipe(b.dataset.pick);
     if (hasVars(r)) return planSheet(r.id, { day, slot });
@@ -675,7 +687,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.3';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
