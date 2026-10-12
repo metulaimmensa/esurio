@@ -18,9 +18,10 @@ for r in map(compute, load()):
     if r.get('src'): x['src'] = r['src']
     if r.get('pick_one'): x['pick_one'] = True
     if r.get('default_vars'): x['default_vars'] = r['default_vars']
+    if r.get('yields'): x['yields'] = r['yields']
     if r.get('variants'):
-        x['variants'] = [{k: v[k] for k in ('name', 'ing', 'minus', 'note', 'dkcal', 'dp', 'df', 'dc') if k in v} for v in r['variants']]
-    for i in x['ing'] + [j for v in x.get('variants', []) for j in v['ing']]:
+        x['variants'] = [{k: v[k] for k in ('name', 'ing', 'minus', 'note', 'dkcal', 'dp', 'df', 'dc', 'yields') if k in v} for v in r['variants']]
+    for i in x['ing'] + [j for v in x.get('variants', []) for j in v.get('ing', [])]:
         if len(i) > 3 and not i[3]: i.pop()
     out.append(x)
 allr = legacy + out

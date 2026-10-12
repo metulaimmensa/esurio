@@ -159,7 +159,7 @@ VIEWS.recipes = {
     const usedTypes = TYPES.filter(t => rs.some(r => r.type === t));
     const cuisines = [...new Set(rs.map(r => r.cuisine).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
     let list = rs.filter(r =>
-      (!filters.q || (r.title + ' ' + r.tags.join(' ') + ' ' + (r.cuisine || '') + ' ' + r.ing.map(ingName).join(' ')).toLowerCase().includes(filters.q.toLowerCase())) &&
+      (!filters.q || (r.title + ' ' + r.tags.join(' ') + ' ' + (r.cuisine || '') + ' ' + r.ing.map(ingName).join(' ') + ' ' + (r.variants || []).flatMap(v => (v.ing || []).map(ingName)).join(' ')).toLowerCase().includes(filters.q.toLowerCase())) &&
       (!filters.type || r.type === filters.type) &&
       (!filters.cuisine || r.cuisine === filters.cuisine) &&
       (!filters.have || missing(r).length <= 2) &&
@@ -432,8 +432,11 @@ function toggleCooked(d, eid) {
   e.done = !e.done; mark('e:' + e.id);
   if (e.done) {
     const r = getRecipe(e.rid); const used = [];
-    if (r) for (const i of effIng(r, e.vars)) { const o = ingOpt(i), n = canon(ingName(i)); if (!o.staple && !o.opt && have(n)) { setHave(n, false); used.push(n); } }
-    toast(used.length ? `Списал со склада: ${used.join(', ')}` : 'Отмечено как приготовленное');
+    if (r) for (const i of effIng(r, e.vars)) { const o = ingOpt(i), n = canon(ingName(i)); if (!o.staple && have(n) && (!o.opt || catOf(n) === 'Готовое дома')) { setHave(n, false); used.push(n); } /* бульон и др. домашние заготовки тратятся, даже если «по желанию» */ }
+    // побочные продукты (бульон от отварной курицы и т.п.) — на склад
+    const got = r ? [...new Set([...(r.yields || []), ...cleanVars(r, e.vars).flatMap(i => r.variants[i].yields || [])])] : [];
+    got.forEach(n => setHave(n, true));
+    toast([used.length ? `Списал со склада: ${used.join(', ')}` : 'Отмечено как приготовленное', got.length ? `На складе: ${got.join(', ')} 🍲` : ''].filter(Boolean).join('. '));
   }
   save(); render();
 }
@@ -526,10 +529,10 @@ VIEWS.pantry = {
     const q = pantryQ.toLowerCase();
     const ps = allProducts().filter(p => !q || p.toLowerCase().includes(q));
     const yes = ps.filter(p => have(p)), not = ps.filter(p => !have(p));
-    const row = p => `<div class="item" data-p="${esc(p)}"><div class="cb ${have(p) ? 'on' : ''}">${have(p) ? '✓' : ''}</div><div class="grow">${esc(p)}</div>${S.customProducts.includes(p) ? `<button class="btn sm" data-rm="${esc(p)}">✕</button>` : ''}</div>`;
+    const row = p => `<div class="item" data-p="${esc(p)}"><div class="cb ${have(p) ? 'on' : ''}">${have(p) ? '✓' : ''}</div><div class="grow">${esc(p)}</div>${have(p) ? `<button class="btn sm" data-find="${esc(p)}" title="Что приготовить">🔍</button>` : ''}${S.customProducts.includes(p) ? `<button class="btn sm" data-rm="${esc(p)}">✕</button>` : ''}</div>`;
     return `
       <div class="row"><input id="pq" placeholder="Найти или добавить продукт…" value="${esc(pantryQ)}"><button class="btn" id="padd">＋</button></div>
-      <p class="muted small">Отмеченное считается «есть дома» и не попадает в список покупок. «Приготовлено» в плане списывает продукты автоматически (кроме соли и прочей базы).</p>
+      <p class="muted small">Отмеченное считается «есть дома» и не попадает в список покупок. «Приготовлено» в плане списывает продукты (кроме соли и прочей базы) и кладёт на склад то, что осталось, например бульон. 🔍 — что приготовить из продукта.</p>
       <div class="card"><h3 style="margin-top:0">Есть дома · ${yes.length}</h3>${yes.map(row).join('') || '<div class="muted small">Пусто. Холодильник плачет.</div>'}</div>
       <div class="card"><h3 style="margin-top:0">Нет · ${not.length}</h3>${(() => { const g = {}; not.forEach(x => (g[catOf(x)] = g[catOf(x)] || []).push(x)); return Object.keys(g).sort((a, b) => a.localeCompare(b, 'ru')).map(c => `<div class="cat">${esc(c)}</div>${g[c].map(row).join('')}`).join(''); })() || '<div class="muted small">—</div>'}</div>`;
   },
@@ -538,7 +541,8 @@ VIEWS.pantry = {
     pq.oninput = () => { pantryQ = pq.value; const pos = pq.selectionStart; render(); const n = $('#pq'); n.focus(); n.setSelectionRange(pos, pos); };
     const add = () => { const v = pq.value.trim(); if (!v) return; if (!S.customProducts.includes(v) && !allProducts().includes(v)) { S.customProducts.push(v); mark('cp:' + v); } setHave(v, true); pantryQ = ''; save(); render(); toast(`«${v}» есть дома`); };
     $('#padd').onclick = add; pq.onkeydown = e => e.key === 'Enter' && add();
-    document.querySelectorAll('[data-p]').forEach(b => b.onclick = ev => { if (ev.target.closest('[data-rm]')) return; const p = b.dataset.p; setHave(p, !have(p)); save(); render(); });
+    document.querySelectorAll('[data-find]').forEach(b => b.onclick = () => { Object.assign(filters, { q: b.dataset.find, type: '', cuisine: '', diff: 0, maxTime: 0, have: false }); setTab('recipes'); toast(`Рецепты, где есть «${b.dataset.find}»`); });
+    document.querySelectorAll('[data-p]').forEach(b => b.onclick = ev => { if (ev.target.closest('[data-rm],[data-find]')) return; const p = b.dataset.p; setHave(p, !have(p)); save(); render(); });
     document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { const p = b.dataset.rm; S.customProducts = S.customProducts.filter(x => x !== p); mark('cp:' + p); setHave(p, false); save(); render(); });
   }
 };
@@ -687,7 +691,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
