@@ -30,6 +30,8 @@ const now = () => Date.now();
 function mark(...keys) { const t = now(); keys.forEach(k => S.ts[k] = t); }
 function setHave(n, v) { S.pantry[n] = !!v; mark('p:' + n); }
 const have = n => !!S.pantry[n];
+// база, которая не кончается от одного блюда: не списывается и не считается «недостающей»
+const BASE = new Set(['Соль', 'Перец чёрный', 'Масло растительное', 'Вода', 'Вода ледяная']);
 function save(quiet) { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('Не удалось сохранить'); } if (!quiet) { try { Sync.later(); } catch (e) { } } }
 load();
 
@@ -110,7 +112,7 @@ function effNut(r, vars) {
 // чего не хватает для блюда по складу (без базовых, без «по желанию», без воды)
 function missing(r, vars) {
   const out = new Set();
-  for (const i of effIng(r, vars || defaultVars(r))) { const o = ingOpt(i), n = canon(ingName(i)); if (o.staple || o.opt || n === 'Вода') continue; if (!have(n)) out.add(n); }
+  for (const i of effIng(r, vars || defaultVars(r))) { const o = ingOpt(i), n = canon(ingName(i)); if (o.staple || o.opt || BASE.has(n)) continue; if (!have(n)) out.add(n); }
   return [...out];
 }
 const varLabel = (r, vars) => cleanVars(r, vars).map(i => r.variants[i].name).join(', ');
@@ -431,7 +433,7 @@ function toggleCooked(d, eid) {
   e.done = !e.done; mark('e:' + e.id);
   if (e.done) {
     const r = getRecipe(e.rid); const used = [];
-    if (r) for (const i of effIng(r, e.vars)) { const o = ingOpt(i), n = canon(ingName(i)); if (!o.staple && have(n) && (!o.opt || catOf(n) === 'Готовое дома')) { setHave(n, false); used.push(n); } /* бульон и др. домашние заготовки тратятся, даже если «по желанию» */ }
+    if (r) for (const i of effIng(r, e.vars)) { const o = ingOpt(i), n = canon(ingName(i)); if (!o.staple && !BASE.has(n) && have(n) && (!o.opt || catOf(n) === 'Готовое дома')) { setHave(n, false); used.push(n); } /* бульон и др. домашние заготовки тратятся, даже если «по желанию» */ }
     // побочные продукты (бульон от отварной курицы и т.п.) — на склад
     const got = r ? [...new Set([...(r.yields || []), ...cleanVars(r, e.vars).flatMap(i => r.variants[i].yields || [])])] : [];
     got.forEach(n => setHave(n, true));
@@ -690,7 +692,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
