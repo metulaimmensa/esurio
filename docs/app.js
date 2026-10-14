@@ -214,6 +214,8 @@ function rCard(r) {
 }
 
 /* ================= Экран: рецепт ================= */
+/* Вариант может нести свои шаги (паэлья, ризотто) — тогда они заменяют общие */
+const effSteps = (r, vars) => { const v = (vars || []).map(i => (r.variants || [])[i]).find(v => v && v.steps && v.steps.length); return v ? v.steps : r.steps; };
 const recipeUI = {}; // id -> {servings, done:Set, vars}
 VIEWS.recipe = {
   title: id => (getRecipe(id) || {}).title || 'Рецепт',
@@ -230,6 +232,7 @@ VIEWS.recipe = {
       const o = ingOpt(i), hv = have(canon(ingName(i)));
       return `<li><span>${esc(ingName(i))}${hv ? '<span class="have">✓ есть</span>' : ''}${o.note ? `<br><span class="muted small">${esc(o.note)}</span>` : ''}</span><span class="amt">${esc(fmtAmt(ingAmt(i) * k, ingUnit(i)))}</span></li>`;
     };
+    const steps = effSteps(r, ui.vars);
     const varNotes = ui.vars.map(i => r.variants[i]).filter(v => v.note).map(v => `<div class="note" style="margin-top:8px"><b>${esc(v.name)}:</b> ${esc(v.note)}</div>`).join('');
     return `
       <div class="row" style="gap:14px;margin-top:4px">
@@ -260,7 +263,7 @@ VIEWS.recipe = {
       </div>
       <div class="card">
         <h3 style="margin-top:0">Шаги <span class="muted small">— тапни номер, чтобы отметить</span></h3>
-        ${r.steps.map((s, n) => `
+        ${steps.map((s, n) => `
           <div class="step ${ui.done.has(n) ? 'done' : ''}">
             <button class="n" data-step="${n}">${ui.done.has(n) ? '✓' : n + 1}</button>
             <div class="st grow"><b>${esc(s[0])}</b>${esc(s[1])}
@@ -280,9 +283,9 @@ VIEWS.recipe = {
     const ui = recipeUI[id];
     $('#sMinus').onclick = () => { ui.servings = Math.max(1, ui.servings - 1); render(); };
     $('#sPlus').onclick = () => { ui.servings = Math.min(20, ui.servings + 1); render(); };
-    document.querySelectorAll('[data-var]').forEach(b => b.onclick = () => { ui.vars = toggleVar(r, ui.vars, +b.dataset.var); render(); });
+    document.querySelectorAll('[data-var]').forEach(b => b.onclick = () => { const had = effSteps(r, ui.vars); ui.vars = toggleVar(r, ui.vars, +b.dataset.var); if (effSteps(r, ui.vars) !== had) ui.done.clear(); render(); });
     document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const n = +b.dataset.step; ui.done.has(n) ? ui.done.delete(n) : ui.done.add(n); render(); });
-    document.querySelectorAll('[data-timer]').forEach(b => b.onclick = () => { const s = r.steps[+b.dataset.timer]; startTimer(`${r.title}: ${s[0]}`, s[2]); });
+    document.querySelectorAll('[data-timer]').forEach(b => b.onclick = () => { const s = effSteps(r, ui.vars)[+b.dataset.timer]; startTimer(`${r.title}: ${s[0]}`, s[2]); });
     $('#toPlan').onclick = () => planSheet(id, { vars: ui.vars });
     $('#editR').onclick = () => go('edit', id);
     $('#delR').onclick = () => confirmSheet(`Удалить «${r.title}»?`, 'Из плана он тоже пропадёт.', () => {
@@ -692,7 +695,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '1.6';
+const APP_VERSION = '1.6.1';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
