@@ -31,7 +31,7 @@ def nut(ings):
 
 def load():
     out = []
-    for mod in ['r_breakfast', 'r_soups', 'r_mains', 'r_salads', 'r_video', 'r_world', 'r_patch']:
+    for mod in ['r_breakfast', 'r_soups', 'r_mains', 'r_salads', 'r_video', 'r_world', 'r_world2', 'r_patch']:
         try: m = importlib.import_module(mod)
         except ModuleNotFoundError: continue
         out += m.R

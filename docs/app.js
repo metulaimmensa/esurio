@@ -39,7 +39,7 @@ load();
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
-const TYPES = ['завтрак', 'первое', 'второе', 'гарнир', 'салат', 'перекус', 'десерт', 'напиток', 'соус'];
+const TYPES = ['завтрак', 'первое', 'второе', 'гарнир', 'салат', 'перекус', 'десерт', 'напиток', 'соус', 'особый случай'];
 const SLOTS = ['Завтрак', 'Обед', 'Ужин', 'Перекус'];
 const DIFF = ['', 'легко', 'средне', 'сложно'];
 const diffDots = d => '●'.repeat(d) + '○'.repeat(3 - d);
@@ -695,7 +695,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.7';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
