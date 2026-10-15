@@ -28,8 +28,17 @@ function load() {
 }
 const now = () => Date.now();
 function mark(...keys) { const t = now(); keys.forEach(k => S.ts[k] = t); }
-function setHave(n, v) { S.pantry[n] = !!v; mark('p:' + n); }
-const have = n => !!S.pantry[n];
+/* Бульоны считаются порциями по 250 мл (кубик концентрата ≈ порция). Остальное — просто «есть / нет». */
+const PORTION_ML = 250;
+const QTY = new Set(['Куриный бульон', 'Мясной бульон', 'Креветочный бульон']);
+const SUBS = { 'Мясной бульон': ['Куриный бульон'], 'Куриный бульон': ['Мясной бульон'] }; // взаимозаменяемы, если родного нет
+const qty = n => { const v = S.pantry[n]; return typeof v === 'number' ? v : (v ? 4 : 0); }; // старое «есть» = ~1 л
+function setHave(n, v) { S.pantry[n] = QTY.has(n) ? (v === true ? (qty(n) || 4) : Math.max(0, +v || 0)) : !!v; mark('p:' + n); }
+function addQty(n, k) { S.pantry[n] = Math.max(0, qty(n) + k); mark('p:' + n); }
+const have = n => QTY.has(n) ? qty(n) > 0 : !!S.pantry[n];
+const subOf = n => have(n) ? n : (SUBS[n] || []).find(have) || null; // что реально возьмём со склада
+const haveAny = n => !!subOf(n);
+function portionsOf(i, k = 1) { const a = ingAmt(i) * k, u = ingUnit(i); const ml = u === 'мл' ? a : u === 'л' ? a * 1000 : PORTION_ML; return Math.max(1, Math.round(ml / PORTION_ML)); }
 // база, которая не кончается от одного блюда: не списывается и не считается «недостающей»
 const BASE = new Set(['Соль', 'Перец чёрный', 'Масло растительное', 'Вода', 'Вода ледяная']);
 function save(quiet) { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('Не удалось сохранить'); } if (!quiet) { try { Sync.later(); } catch (e) { } } }
@@ -39,7 +48,7 @@ load();
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
-const TYPES = ['завтрак', 'первое', 'второе', 'гарнир', 'салат', 'перекус', 'десерт', 'напиток', 'соус', 'особый случай'];
+const TYPES = ['завтрак', 'первое', 'второе', 'гарнир', 'салат', 'перекус', 'десерт', 'напиток', 'соус', 'заготовка', 'особый случай'];
 const SLOTS = ['Завтрак', 'Обед', 'Ужин', 'Перекус'];
 const DIFF = ['', 'легко', 'средне', 'сложно'];
 const diffDots = d => '●'.repeat(d) + '○'.repeat(3 - d);
@@ -113,7 +122,7 @@ function effNut(r, vars) {
 // чего не хватает для блюда по складу (без базовых, без «по желанию», без воды)
 function missing(r, vars) {
   const out = new Set();
-  for (const i of effIng(r, vars || defaultVars(r))) { const o = ingOpt(i), n = canon(ingName(i)); if (o.staple || o.opt || BASE.has(n)) continue; if (!have(n)) out.add(n); }
+  for (const i of effIng(r, vars || defaultVars(r))) { const o = ingOpt(i), n = canon(ingName(i)); if (o.staple || o.opt || BASE.has(n)) continue; if (!haveAny(n)) out.add(n); }
   return [...out];
 }
 const varLabel = (r, vars) => cleanVars(r, vars).map(i => r.variants[i].name).join(', ');
@@ -230,7 +239,7 @@ VIEWS.recipe = {
     const main = ing.filter(i => !ingOpt(i).opt), opt = ing.filter(i => ingOpt(i).opt);
     const nut = effNut(r, ui.vars);
     const li = i => {
-      const o = ingOpt(i), hv = have(canon(ingName(i)));
+      const o = ingOpt(i), hv = haveAny(canon(ingName(i)));
       return `<li><span>${esc(ingName(i))}${hv ? '<span class="have">✓ есть</span>' : ''}${o.note ? `<br><span class="muted small">${esc(o.note)}</span>` : ''}</span><span class="amt">${esc(fmtAmt(ingAmt(i) * k, ingUnit(i)))}</span></li>`;
     };
     const steps = effSteps(r, ui.vars);
@@ -444,10 +453,25 @@ function toggleCooked(d, eid) {
   e.done = !e.done; mark('e:' + e.id);
   if (e.done) {
     const r = getRecipe(e.rid); const used = [];
-    if (r) for (const i of effIng(r, e.vars)) { const o = ingOpt(i), n = canon(ingName(i)); if (!o.staple && !BASE.has(n) && have(n) && (!o.opt || catOf(n) === 'Готовое дома')) { setHave(n, false); used.push(n); } /* бульон и др. домашние заготовки тратятся, даже если «по желанию» */ }
-    // побочные продукты (бульон от отварной курицы и т.п.) — на склад
-    const got = r ? [...new Set([...(r.yields || []), ...cleanVars(r, e.vars).flatMap(i => r.variants[i].yields || [])])] : [];
-    got.forEach(n => setHave(n, true));
+    const k = r ? e.portions / (r.servings || 1) : 1;
+    if (r) for (const i of effIng(r, e.vars)) {
+      const o = ingOpt(i), n = canon(ingName(i));
+      if (o.staple || BASE.has(n)) continue;
+      if (QTY.has(n)) { // бульон: списываем порции, при нехватке родного — заменитель
+        const src = subOf(n); if (!src) continue;
+        const take = Math.min(portionsOf(i, k), qty(src)); addQty(src, -take);
+        used.push(`${src} −${take} порц.${qty(src) ? ` (осталось ${qty(src)})` : ''}`); continue;
+      }
+      if (have(n) && (!o.opt || catOf(n) === 'Готовое дома')) { setHave(n, false); used.push(n); } /* домашние заготовки тратятся, даже если «по желанию» */
+    }
+    // побочные продукты и заготовки — на склад. yields: 'Имя' или ['Имя', порций]
+    const ys = r ? [...(r.yields || []), ...cleanVars(r, e.vars).flatMap(i => r.variants[i].yields || [])] : [];
+    const got = [];
+    for (const y of ys) {
+      const [n, c] = Array.isArray(y) ? y : [y, null];
+      if (QTY.has(n)) { const add = r.type === 'заготовка' ? (c || 4) : Math.max(1, Math.round((c || 4) * k)); addQty(n, add); /* заготовка — всегда целая кастрюля */ got.push(`${n} +${add} порц.`); }
+      else if (!got.includes(n)) { setHave(n, true); got.push(n); }
+    }
     toast([used.length ? `Списал со склада: ${used.join(', ')}` : 'Отмечено как приготовленное', got.length ? `На складе: ${got.join(', ')} 🍲` : ''].filter(Boolean).join('. '));
   }
   save(); render();
@@ -479,9 +503,9 @@ VIEWS.shop = {
   title: 'Список покупок',
   html() {
     const { items } = shoppingList();
-    const need = items.filter(i => !i.opt && !have(i.name));
-    const got = items.filter(i => have(i.name));
-    const opt = items.filter(i => i.opt && !have(i.name));
+    const need = items.filter(i => !i.opt && !haveAny(i.name));
+    const got = items.filter(i => haveAny(i.name));
+    const opt = items.filter(i => i.opt && !haveAny(i.name));
     const groups = {};
     need.forEach(i => (groups[catOf(i.name)] = groups[catOf(i.name)] || []).push(i));
     const row = (i, on) => `<div class="item ${on ? 'off' : ''}" data-toggle="${esc(i.name)}">
@@ -513,7 +537,7 @@ VIEWS.shop = {
     if ($('#toPlan2')) $('#toPlan2').onclick = () => setTab('plan');
     if ($('#copy')) $('#copy').onclick = () => {
       const { items } = shoppingList();
-      const need = items.filter(i => !i.opt && !have(i.name));
+      const need = items.filter(i => !i.opt && !haveAny(i.name));
       const groups = {}; need.forEach(i => (groups[catOf(i.name)] = groups[catOf(i.name)] || []).push(i));
       let txt = Object.keys(groups).sort().map(c => `${c}:\n` + groups[c].map(i => `— ${i.name}: ${i.parts.join(' + ')}`).join('\n')).join('\n\n');
       const ex = S.extras.filter(x => !x.done).map(x => `— ${x.name}`);
@@ -541,10 +565,12 @@ VIEWS.pantry = {
     const q = pantryQ.toLowerCase();
     const ps = allProducts().filter(p => !q || p.toLowerCase().includes(q));
     const yes = ps.filter(p => have(p)), not = ps.filter(p => !have(p));
-    const row = p => `<div class="item" data-p="${esc(p)}"><div class="cb ${have(p) ? 'on' : ''}">${have(p) ? '✓' : ''}</div><div class="grow">${esc(p)}</div>${have(p) ? `<button class="btn sm" data-find="${esc(p)}" title="Что приготовить">🔍</button>` : ''}${S.customProducts.includes(p) ? `<button class="btn sm" data-rm="${esc(p)}">✕</button>` : ''}</div>`;
+    const row = p => QTY.has(p)
+      ? `<div class="item" data-qp="${esc(p)}"><div class="cb ${have(p) ? 'on' : ''}" style="width:auto;min-width:26px;padding:0 4px">${qty(p) || ''}</div><div class="grow">${esc(p)}<br><span class="muted small">${qty(p) ? `${qty(p)} порц. по 250 мл ≈ ${(qty(p) * PORTION_ML / 1000).toLocaleString('ru')} л` : 'порции по 250 мл (кубик концентрата)'}</span></div>${have(p) ? `<button class="btn sm" data-find="${esc(p)}" title="Что приготовить">🔍</button><button class="btn sm" data-dq="${esc(p)}">−</button>` : ''}<button class="btn sm" data-iq="${esc(p)}">＋</button></div>`
+      : `<div class="item" data-p="${esc(p)}"><div class="cb ${have(p) ? 'on' : ''}">${have(p) ? '✓' : ''}</div><div class="grow">${esc(p)}</div>${have(p) ? `<button class="btn sm" data-find="${esc(p)}" title="Что приготовить">🔍</button>` : ''}${S.customProducts.includes(p) ? `<button class="btn sm" data-rm="${esc(p)}">✕</button>` : ''}</div>`;
     return `
       <div class="row"><input id="pq" placeholder="Найти или добавить продукт…" value="${esc(pantryQ)}"><button class="btn" id="padd">＋</button></div>
-      <p class="muted small">Отмеченное считается «есть дома» и не попадает в список покупок. «Приготовлено» в плане списывает продукты (кроме соли и прочей базы) и кладёт на склад то, что осталось, например бульон. 🔍 — что приготовить из продукта.</p>
+      <p class="muted small">Отмеченное считается «есть дома» и не попадает в список покупок. «Приготовлено» в плане списывает продукты (кроме соли и прочей базы) и кладёт на склад то, что осталось, например бульон. Бульоны считаются порциями по 250 мл (кубик концентрата = порция), ＋/− правят руками. 🔍 — что приготовить из продукта.</p>
       <div class="card"><h3 style="margin-top:0">Есть дома · ${yes.length}</h3>${yes.map(row).join('') || '<div class="muted small">Пусто. Холодильник плачет.</div>'}</div>
       <div class="card"><h3 style="margin-top:0">Нет · ${not.length}</h3>${(() => { const g = {}; not.forEach(x => (g[catOf(x)] = g[catOf(x)] || []).push(x)); return Object.keys(g).sort((a, b) => a.localeCompare(b, 'ru')).map(c => `<div class="cat">${esc(c)}</div>${g[c].map(row).join('')}`).join(''); })() || '<div class="muted small">—</div>'}</div>`;
   },
@@ -555,6 +581,8 @@ VIEWS.pantry = {
     $('#padd').onclick = add; pq.onkeydown = e => e.key === 'Enter' && add();
     document.querySelectorAll('[data-find]').forEach(b => b.onclick = () => { Object.assign(filters, { q: b.dataset.find, type: '', cuisine: '', diff: 0, maxTime: 0, have: false }); setTab('recipes'); toast(`Рецепты, где есть «${b.dataset.find}»`); });
     document.querySelectorAll('[data-p]').forEach(b => b.onclick = ev => { if (ev.target.closest('[data-rm],[data-find]')) return; const p = b.dataset.p; setHave(p, !have(p)); save(); render(); });
+    document.querySelectorAll('[data-iq]').forEach(b => b.onclick = () => { addQty(b.dataset.iq, 1); save(); render(); });
+    document.querySelectorAll('[data-dq]').forEach(b => b.onclick = () => { addQty(b.dataset.dq, -1); save(); render(); });
     document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { const p = b.dataset.rm; S.customProducts = S.customProducts.filter(x => x !== p); mark('cp:' + p); setHave(p, false); save(); render(); });
   }
 };
@@ -703,7 +731,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '1.8';
+const APP_VERSION = '1.9';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
@@ -724,7 +752,7 @@ const Sync = (() => {
   function toFlat() {
     const f = {}, put = (k, v) => { f[k] = { v, ts: S.ts[k] || 0 }; };
     for (const d in S.plan) for (const e of S.plan[d]) put('e:' + e.id, Object.assign({}, e, { date: d }));
-    for (const n in S.pantry) put('p:' + n, !!S.pantry[n]);
+    for (const n in S.pantry) put('p:' + n, typeof S.pantry[n] === 'number' ? S.pantry[n] : !!S.pantry[n]);
     for (const x of S.extras) put('x:' + x.id, x);
     for (const n of S.customProducts) put('cp:' + n, true);
     for (const id in S.recipes) put('r:' + id, S.recipes[id]);
