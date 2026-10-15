@@ -1,5 +1,5 @@
 # Правки к уже существующим рецептам (подробнее шаги, новые варианты). Подключается последним.
-import r_mains, r_soups, r_salads, r_breakfast
+import r_mains, r_soups, r_salads, r_breakfast, r_world, r_world2
 R = []
 
 def get(mod, rid):
@@ -125,3 +125,33 @@ def shrimp_add(grams, how):
 get(r_mains, 'pad-thai').setdefault('variants', []).append(shrimp_add(150, 'Пад тай с креветками — классика: жарить их вместе с курицей (или вместо), по 40 секунд с каждой стороны.'))
 get(r_mains, 'thai-sweet-sour-chicken').setdefault('variants', []).append(shrimp_add(150, 'Креветки — после курицы, на минуту, перед овощами.'))
 get(r_soups, 'pumpkin-coconut-soup').setdefault('variants', []).append(shrimp_add(120, 'Креветки обжарить отдельно по 40 секунд с каждой стороны и выложить сверху на суп.'))
+
+
+# ---------- 1.8: куриный бульон со склада вместо воды ----------
+BROTH_NOTE = 'Куриный бульон со склада (остаётся, когда варишь курицу для салатов или окрошки) вместо воды — вкуснее. Соли клади меньше: бульон уже солёный.'
+def on_broth(ml, minus=('Вода',), note=''):
+    return dict(name='На курином бульоне (со склада)', minus=list(minus), ing=[['Куриный бульон', ml, 'мл']], note=(note + ' ' + BROTH_NOTE).strip())
+
+def find(rid):
+    for m in (r_breakfast, r_soups, r_mains, r_salads, r_world, r_world2):
+        for x in m.R:
+            if x['id'] == rid: return x
+    import r_video
+    return next(x for x in r_video.R if x['id'] == rid)
+
+find('buckwheat-butter')['variants'].append(on_broth(160, note='Гречка на бульоне — классика из детства.'))
+find('side-buckwheat').setdefault('variants', []).append(on_broth(400))
+find('side-rice').setdefault('variants', []).append(on_broth(250, note='Для риса к курице, карри, оякодону. Для тайских блюд лучше на воде.'))
+find('dal')['variants'].append(on_broth(800))
+find('tom-yum')['variants'].append(dict(name='Куриный бульон вместо части воды', minus=[], ing=[['Куриный бульон', 800, 'мл']], note='Влей вместо 800 мл воды — в Таиланде том ям часто и варят на курином. ' + BROTH_NOTE))
+o = find('oyakodon')
+o.setdefault('variants', []).append(on_broth(120, minus=('Вода', 'Даси (гранулы)'), note='Вместо даси с водой — 120 мл куриного бульона: японцы и сами так делают, когда нет даси.'))
+for i in o['ing']:
+    if i[0] == 'Даси (гранулы)': i[3]['note'] = 'на 120 мл воды; нет даси — вариант «На курином бульоне»'
+
+# в карри и паэлье — бульон «по желанию»: спишется со склада, если он есть
+c = find('curry')
+c['variants'][0]['ing'].append(['Куриный бульон', 150, 'мл', {'opt': True, 'note': 'вместо горячей воды на шаге «Тушить»'}])
+c['variants'][1]['ing'].append(['Куриный бульон', 600, 'мл', {'opt': True, 'note': 'вместо воды — японцы так и делают'}])
+p = find('paella')
+p['variants'][0]['ing'].append(['Куриный бульон', 500, 'мл', {'opt': True, 'note': 'есть на складе — замени им половину воды, будет глубже'}])

@@ -67,6 +67,7 @@ const MON = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл
 function dayLabel(dateIso) {
   const t = iso(new Date());
   if (dateIso === t) return 'Сегодня';
+  if (dateIso === iso(addDays(new Date(), -1))) return 'Вчера';
   if (dateIso === iso(addDays(new Date(), 1))) return 'Завтра';
   if (dateIso === iso(addDays(new Date(), 2))) return 'Послезавтра';
   const d = new Date(dateIso + 'T12:00:00');
@@ -357,7 +358,9 @@ VIEWS.edit = {
 
 /* ================= Экран: план ================= */
 let planDay = iso(new Date());
-function week() { return Array.from({ length: 7 }, (_, n) => iso(addDays(new Date(), n))); }
+/* 3 дня назад (дописать/отметить съеденное) + сегодня + 6 вперёд */
+const PAST_DAYS = 3;
+function week() { return Array.from({ length: 7 + PAST_DAYS }, (_, n) => iso(addDays(new Date(), n - PAST_DAYS))); }
 const prof = id => S.profiles.find(p => p.id === id) || S.profiles[0];
 const meP = () => prof(S.me || S.profiles[0].id);
 function cookOf(d) { return S.cookOverride[d] || S.cook[new Date(d + 'T12:00:00').getDay()] || S.profiles[0].id; }
@@ -388,17 +391,18 @@ VIEWS.plan = {
   title: 'План на неделю',
   html() {
     const days = week();
-    if (!days.includes(planDay)) planDay = days[0];
+    const today = iso(new Date()); if (!days.includes(planDay)) planDay = today;
     const entries = S.plan[planDay] || [];
     const ck = prof(cookOf(planDay));
     return `
       <div class="week">${days.map(d => {
         const dt = new Date(d + 'T12:00:00');
-        return `<button class="day ${d === planDay ? 'on' : ''} ${(S.plan[d] || []).length ? 'has' : ''}" data-day="${d}">${WD[dt.getDay()]}<b>${dt.getDate()}</b><span class="ck">${esc(prof(cookOf(d)).name[0])}</span><i></i></button>`;
+        return `<button class="day ${d === planDay ? 'on' : ''} ${(S.plan[d] || []).length ? 'has' : ''} ${d < today ? 'past' : ''}" data-day="${d}">${WD[dt.getDay()]}<b>${dt.getDate()}</b><span class="ck">${esc(prof(cookOf(d)).name[0])}</span><i></i></button>`;
       }).join('')}</div>
       <div class="card">
         <div class="row" style="justify-content:space-between"><b>${dayLabel(planDay)}</b><button class="chip" id="cookBtn">👨‍🍳 готовит ${esc(ck.name)}${S.cookOverride[planDay] ? ' ✎' : ''}</button></div>
         ${bars(planDay)}
+        ${planDay < today ? '<div class="small" style="margin-top:6px;color:var(--accent)">Прошедший день. Добавь, что ели, и жми ✓ — продукты спишутся со склада.</div>' : ''}
         ${entries.length ? '' : '<div class="small muted" style="margin-top:6px">Пусто. Голодать не планировали?</div>'}
       </div>
       ${SLOTS.map(slot => {
@@ -418,6 +422,10 @@ VIEWS.plan = {
   },
   bind() {
     document.querySelectorAll('[data-day]').forEach(b => b.onclick = () => { planDay = b.dataset.day; render(); });
+    { // лента дней: по умолчанию сегодня — первым, прошлые дни — свайпом влево
+      const w = $('.week'), today = iso(new Date()), anchor = w && w.querySelector(`[data-day="${planDay < today ? planDay : today}"]`);
+      if (anchor) w.scrollLeft = anchor.offsetLeft - w.offsetLeft;
+    }
     document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => pickRecipeSheet(planDay, b.dataset.add));
     document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => go('recipe', b.dataset.open));
     document.querySelectorAll('[data-cook]').forEach(b => b.onclick = () => toggleCooked(planDay, b.dataset.cook));
@@ -695,7 +703,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '1.7.2';
+const APP_VERSION = '1.8';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
