@@ -1,0 +1,106 @@
+/* Generated Esurio themes: set data-esurio-theme on html or root element. */
+:root { color-scheme: dark; }
+:root[data-esurio-theme="olive-cream"] {
+  --es-bg: #171C18;
+  --es-surface: #252D25;
+  --es-elevated: #354132;
+  --es-primary: #A4B58C;
+  --es-on-primary: #171C18;
+  --es-text: #E9DFC9;
+  --es-muted: #ABB5A4;
+  --es-accent: #C28B61;
+  --es-border: #3D4A3C;
+  --es-success: #86B68C;
+  --es-warning: #E3AE65;
+  --es-danger: #C77667;
+  color-scheme: dark;
+}
+:root[data-esurio-theme="terracotta-espresso"] {
+  --es-bg: #191412;
+  --es-surface: #29201C;
+  --es-elevated: #3A2B25;
+  --es-primary: #CA8068;
+  --es-on-primary: #191412;
+  --es-text: #F0DFCC;
+  --es-muted: #B6A18E;
+  --es-accent: #D6AD79;
+  --es-border: #4A3930;
+  --es-success: #89B58E;
+  --es-warning: #E1AF69;
+  --es-danger: #C96761;
+  color-scheme: dark;
+}
+:root[data-esurio-theme="burgundy-oat"] {
+  --es-bg: #1D1719;
+  --es-surface: #302427;
+  --es-elevated: #403036;
+  --es-primary: #AC747A;
+  --es-on-primary: #1D1719;
+  --es-text: #EBDCCA;
+  --es-muted: #B9A38F;
+  --es-accent: #C5A284;
+  --es-border: #4A383C;
+  --es-success: #8CB796;
+  --es-warning: #DEAD72;
+  --es-danger: #CC7777;
+  color-scheme: dark;
+}
+:root[data-esurio-theme="midnight-saffron"] {
+  --es-bg: #131A20;
+  --es-surface: #222C34;
+  --es-elevated: #2F3B46;
+  --es-primary: #E6B45F;
+  --es-on-primary: #131A20;
+  --es-text: #F3E9DA;
+  --es-muted: #99AAB2;
+  --es-accent: #849BA6;
+  --es-border: #3E505D;
+  --es-success: #84B799;
+  --es-warning: #E9B765;
+  --es-danger: #D17B76;
+  color-scheme: dark;
+}
+:root[data-esurio-theme="porcelain-cinnamon"] {
+  --es-bg: #F3EDE3;
+  --es-surface: #FFFCF7;
+  --es-elevated: #EAD8C8;
+  --es-primary: #A96145;
+  --es-on-primary: #FFFCF7;
+  --es-text: #33261F;
+  --es-muted: #79685C;
+  --es-accent: #B8A99A;
+  --es-border: #D8C9BA;
+  --es-success: #477852;
+  --es-warning: #9C6A2D;
+  --es-danger: #AC483D;
+  color-scheme: light;
+}
+:root[data-esurio-theme="matcha-charcoal"] {
+  --es-bg: #171A17;
+  --es-surface: #262B25;
+  --es-elevated: #343B30;
+  --es-primary: #B6C486;
+  --es-on-primary: #171A17;
+  --es-text: #F1EDDC;
+  --es-muted: #B5B6A4;
+  --es-accent: #D39C69;
+  --es-border: #455041;
+  --es-success: #87B693;
+  --es-warning: #DDAF68;
+  --es-danger: #CA756F;
+  color-scheme: dark;
+}
+:root:not([data-esurio-theme]) {
+  --es-bg: #171C18;
+  --es-surface: #252D25;
+  --es-elevated: #354132;
+  --es-primary: #A4B58C;
+  --es-on-primary: #171C18;
+  --es-text: #E9DFC9;
+  --es-muted: #ABB5A4;
+  --es-accent: #C28B61;
+  --es-border: #3D4A3C;
+  --es-success: #86B68C;
+  --es-warning: #E3AE65;
+  --es-danger: #C77667;
+}

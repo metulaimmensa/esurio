@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#16130f">
+<meta name="theme-color" content="#171C18">
+<script>try{var t=localStorage.getItem("esurio-theme");document.documentElement.dataset.esurioTheme=t||"olive-cream"}catch(e){document.documentElement.dataset.esurioTheme="olive-cream"}</script>
 <title>Esurio</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon.png">
@@ -12,14 +13,15 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Esurio">
+<link rel="stylesheet" href="themes.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header id="top">
-  <button id="backBtn" class="icon hidden" aria-label="Назад">←</button>
+  <button id="backBtn" class="icon hidden" aria-label="Назад" data-i="arrow-left"></button>
   <h1 id="title">Рецепты</h1>
   <span id="syncDot" class="muted" aria-live="polite"></span>
-  <button id="settingsBtn" class="icon" aria-label="Настройки">⚙</button>
+  <button id="settingsBtn" class="icon" aria-label="Настройки" data-i="settings"></button>
 </header>
 
 <main id="view"></main>
@@ -29,16 +31,18 @@
 <div id="sheet" class="hidden"><div class="sheet-bg"></div><div class="sheet-body"></div></div>
 
 <nav id="tabs">
-  <button data-tab="recipes" class="on"><span>📖</span>Рецепты</button>
-  <button data-tab="plan"><span>📅</span>План</button>
-  <button data-tab="shop"><span>🛒</span>Покупки</button>
-  <button data-tab="pantry"><span>🧺</span>Склад</button>
+  <button data-tab="recipes" class="on"><span class="pill" data-i="book-open"></span>Рецепты</button>
+  <button data-tab="plan"><span class="pill" data-i="calendar-days"></span>План</button>
+  <button data-tab="shop"><span class="pill" data-i="shopping-cart"></span>Покупки</button>
+  <button data-tab="pantry"><span class="pill" data-i="refrigerator"></span>Склад</button>
 </nav>
 
 <script src="vendor/capacitor.js"></script>
 <script src="vendor/local-notifications.js"></script>
 <script src="vendor/haptics.js"></script>
+<script src="icons.js"></script>
 <script src="recipes.js"></script>
+<script src="heroes.js"></script>
 <script src="app.js"></script>
 <script>
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !(window.capacitorExports && window.capacitorExports.Capacitor.isNativePlatform())) navigator.serviceWorker.register('sw.js').catch(() => {});
