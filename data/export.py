@@ -3,6 +3,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from build import load, compute
 from nutrition import N
+from tags import TAGS
 
 legacy = json.load(open(os.path.join(HERE, 'legacy.json')))
 for r in legacy:
@@ -25,6 +26,8 @@ for r in map(compute, load()):
         if len(i) > 3 and not i[3]: i.pop()
     out.append(x)
 allr = legacy + out
+for r in allr:
+    if r['id'] in TAGS: r['w'] = TAGS[r['id']]
 cats = {k: v['cat'] for k, v in N.items()}
 cats.update({'Лимон (цедра)': 'Овощи и фрукты', 'Масло подсолнечное': 'Бакалея', 'Сметана или варенье к подаче': 'Молочное', 'Вода ледяная': 'Специи'})
 aliases = {'Яйцо (нужны желтки)': 'Яйцо', 'Яйцо (нужен желток)': 'Яйцо', 'Желток': 'Яйцо', 'Масло подсолнечное': 'Масло растительное'}

@@ -54,7 +54,7 @@ const DIFF = ['', 'легко', 'средне', 'сложно'];
 const diffDots = d => '●'.repeat(d) + '○'.repeat(3 - d);
 const canon = n => (window.PRODUCT_ALIASES[n] || n).trim();
 const ICON_IDS = new Set((window.SEED_RECIPES || []).map(r => r.id));
-const thumb = (r, cls = '') => ICON_IDS.has(r.id) ? `<img class="thumb ${cls}" src="img/i64/${r.id}.webp" alt="" loading="lazy" decoding="async">` : `<div class="thumb ${cls}">${esc(r.emoji)}</div>`;
+const thumb = (r, cls = '', big = false) => ICON_IDS.has(r.id) ? `<img class="thumb ${cls}" src="img/${big ? 'i256' : 'i64'}/${r.id}.webp" alt="" loading="lazy" decoding="async">` : `<div class="thumb ${cls}">${esc(r.emoji)}</div>`;
 const THEMES = [
   ['olive-cream', 'Olive & Cream', ['#171C18', '#A4B58C', '#C28B61']],
   ['terracotta-espresso', 'Terracotta', ['#191412', '#CA8068', '#D6AD79']],
@@ -157,7 +157,19 @@ function varChips(r, vars, attr) {
 /* ================= Навигация ================= */
 let tab = 'recipes';
 const stack = []; // [{view, arg}]
-const filters = { q: '', type: '', cuisine: '', diff: 0, maxTime: 0, have: false };
+const filters = { q: '', type: '', region: '', cuisine: '', diff: 0, maxTime: 0, have: false };
+/* Регионы → кухни. Кухня, которой нет в списке, попадает в «Своё». */
+const REGIONS = [
+  ['Европа', ['итальянская', 'французская', 'испанская', 'греческая', 'британская', 'шведская']],
+  ['Россия и Кавказ', ['русская', 'советская', 'грузинская', 'осетинская']],
+  ['Азия', ['японская', 'корейская', 'китайская', 'тайская', 'вьетнамская', 'малайзийская', 'индийская', 'азиатская']],
+  ['Ближний Восток', ['ближневосточная', 'иранская', 'турецкая']],
+  ['Африка', ['марокканская', 'эфиопская', 'нигерийская', 'ганская', 'сенегальская', 'конголезская', 'кенийская', 'мозамбикская', 'южноафриканская']],
+  ['Латинская Америка', ['мексиканская', 'перуанская', 'бразильская', 'колумбийская', 'костариканская']],
+  ['Северная Америка', ['американская', 'техасская', 'стейк-хаус']],
+  ['Своё', ['домашняя', 'авторская', 'народная']],
+];
+const regionOf = c => (REGIONS.find(([, cs]) => cs.includes(c)) || ['Своё'])[0];
 
 function go(view, arg, push = true) {
   if (push) stack.push({ view, arg });
@@ -186,13 +198,14 @@ function filteredRecipes(f = filters) {
   const list = allRecipes().filter(r =>
     (!q || (r.title + ' ' + r.tags.join(' ') + ' ' + (r.cuisine || '') + ' ' + r.ing.map(ingName).join(' ') + ' ' + (r.variants || []).flatMap(v => (v.ing || []).map(ingName)).join(' ')).toLowerCase().includes(q)) &&
     (!f.type || r.type === f.type) &&
+    (!f.region || regionOf(r.cuisine || '') === f.region) &&
     (!f.cuisine || r.cuisine === f.cuisine) &&
     (!f.diff || r.difficulty === f.diff) &&
     (!f.maxTime || r.time <= f.maxTime));
   list.sort((a, b) => (f.have ? missing(a).length - missing(b).length : 0) || a.title.localeCompare(b.title, 'ru'));
   return list;
 }
-const nFilters = () => (filters.cuisine ? 1 : 0) + (filters.diff ? 1 : 0) + (filters.maxTime ? 1 : 0);
+const nFilters = () => (filters.region ? 1 : 0) + (filters.cuisine ? 1 : 0) + (filters.diff ? 1 : 0) + (filters.maxTime ? 1 : 0);
 VIEWS.recipes = {
   title: 'Рецепты',
   html() {
@@ -201,6 +214,7 @@ VIEWS.recipes = {
     const list = filteredRecipes();
     const nf = nFilters();
     const active = [
+      filters.region && [filters.region, 'region'],
       filters.cuisine && [filters.cuisine, 'cuisine'],
       filters.diff && [DIFF[filters.diff], 'diff'],
       filters.maxTime && ['до ' + filters.maxTime + ' мин', 'maxTime'],
@@ -216,11 +230,16 @@ VIEWS.recipes = {
         ${usedTypes.map(t => `<button class="chip ${filters.type === t ? 'on' : ''}" data-type="${t}">${t}</button>`).join('')}
       </div>
       ${active.length ? `<div class="chips">${active.map(([n, k]) => `<button class="chip on" data-clr="${k}">${esc(n)} ${ic('x', 14)}</button>`).join('')}</div>` : ''}
-      <button class="cooknow ${filters.have ? 'on' : ''}" id="haveF">
-        <span class="ib">${ic('chef-hat')}</span>
-        <span class="grow"><b>Можно приготовить сейчас</b><span class="muted small">${filters.have ? 'Сначала то, на что всё есть дома. Соль, масло и «по желанию» не считаются' : 'Проверить рецепты по складу'}</span></span>
-        ${filters.have ? ic('check', 20) : ic('chevron-right', 20)}
-      </button>
+      <div class="duo">
+        <button class="tile ${filters.have ? 'on' : ''}" id="haveF">
+          <span class="ib ok">${filters.have ? ic('check', 20) : ic('chef-hat', 20)}</span>
+          <b>Можно приготовить сейчас</b><span class="muted small">${filters.have ? 'Всё есть — сверху' : 'По складу'}</span>
+        </button>
+        <button class="tile" id="wishBtn">
+          <span class="ib wish">${ic('whim', 20)}</span>
+          <b>Что хочется?</b><span class="muted small">Подбор и сюрприз</span>
+        </button>
+      </div>
       ${filters.have && list.length ? (() => { let prev = -1; return list.map(r => { const n = missing(r).length; const h = n !== prev ? `<div class="grp" style="color:${n ? 'var(--accent)' : 'var(--ok)'}">${word(n)}</div>` : ''; prev = n; return h + rCard(r); }).join(''); })()
         : list.length ? list.map(rCard).join('')
         : filters.have ? `<div class="empty"><div class="big">🧺</div>Склад пустой. Отметь, что есть дома, во вкладке «Склад».</div>`
@@ -231,32 +250,145 @@ VIEWS.recipes = {
     const q = $('#q');
     q.oninput = () => { filters.q = q.value; const pos = q.selectionStart; render(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
     document.querySelectorAll('[data-type]').forEach(b => b.onclick = () => { filters.type = b.dataset.type; render(); });
-    document.querySelectorAll('[data-clr]').forEach(b => b.onclick = () => { filters[b.dataset.clr] = b.dataset.clr === 'cuisine' ? '' : 0; render(); });
+    document.querySelectorAll('[data-clr]').forEach(b => b.onclick = () => { const k = b.dataset.clr; filters[k] = (k === 'cuisine' || k === 'region') ? '' : 0; if (k === 'region') filters.cuisine = ''; render(); });
     $('#haveF').onclick = () => { filters.have = !filters.have; render(); };
+    $('#wishBtn').onclick = () => wishSheet();
     $('#fBtn').onclick = filtersSheet;
     document.querySelectorAll('[data-rid]').forEach(b => b.onclick = () => go('recipe', b.dataset.rid));
     $('#newRecipe').onclick = () => go('edit', null);
   }
 };
+/* ================= Что хочется? ================= */
+window.ICONS.whim = '<path d="M3 12h18a9 9 0 0 1-18 0Z"/><path d="M8 21h8"/><path d="M15.5 2.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/><path d="M8 4.5v3"/><path d="M6.5 6h3"/>';
+const WZ = {
+  b: [['ch', 'Курица, птица'], ['bf', 'Говядина'], ['pk', 'Свинина'], ['fi', 'Рыба'], ['sh', 'Креветки, морепродукты'], ['eg', 'Яйца'], ['vg', 'Без мяса']],
+  t: [['hot', 'Острое'], ['sws', 'Сладко-острое'], ['sour', 'Кислое и свежее'], ['cream', 'Сливочное'], ['umami', 'Умами, солёное'], ['spice', 'Пряное'], ['fruit', 'Фруктовое'], ['smoke', 'Дымное'], ['sweet', 'Сладкое']],
+  f: [['soup', 'Суп'], ['sauce', 'В соусе: рагу, карри'], ['pasta', 'Паста или лапша'], ['rice', 'Рис или крупа'], ['fry', 'Жареное, с гарниром'], ['cold', 'Салат, холодное'], ['wrap', 'Тесто, лепёшка, хлеб']],
+};
+const WZ_STEPS = [
+  { k: 'b', q: 'Из чего?', opts: () => WZ.b },
+  { k: 't', q: 'Какой вкус?', multi: true, hint: 'Можно выбрать пару', opts: () => WZ.t },
+  { k: 'f', q: 'В какой форме?', opts: () => WZ.f },
+  { k: 'region', q: 'Откуда родом?', opts: () => REGIONS.map(([n]) => [n, n]) },
+  { k: 'time', q: 'Сколько есть времени?', opts: () => [['quick', 'Быстро, до 30 минут'], ['any', 'Есть время повозиться']] },
+  { k: 'heavy', q: 'Насколько сытно?', opts: () => [['light', 'Полегче'], ['hearty', 'Посытнее']] },
+];
+const wzPool = () => allRecipes().filter(r => r.w);
+function wzScore(r, a) {
+  let got = 0, max = 0; const w = r.w;
+  if (a.b) { max++; if (w.b.includes(a.b)) got++; }
+  if (a.t && a.t.length) { max++; got += a.t.filter(x => w.t.includes(x)).length / a.t.length; }
+  if (a.f) { max++; if (w.f.includes(a.f)) got++; }
+  if (a.region) { max++; if (regionOf(r.cuisine || '') === a.region) got++; }
+  if (a.time === 'quick') { max++; if (r.time <= 30) got++; }
+  if (a.heavy) { max++; if (a.heavy === 'light' ? r.kcal < 550 : r.kcal >= 650) got++; }
+  return { got, max };
+}
+function similar(r, n = 6) {
+  if (!r || !r.w) return [];
+  const ov = (a, b) => a.filter(x => b.includes(x)).length;
+  return wzPool().filter(x => x.id !== r.id)
+    .map(x => [3 * ov(x.w.t, r.w.t) + 3 * ov(x.w.f, r.w.f) + 2 * ov(x.w.b, r.w.b) + (x.cuisine !== r.cuisine ? 1 : 0) + Math.random() * 0.5, x])
+    .sort((a, b) => b[0] - a[0]).slice(0, n).map(p => p[1]);
+}
+function wishSheet() {
+  const hist = [];
+  let st = { v: 'start' }, ans = {}, lastRand = null, likeQ = '';
+  const go2 = next => { hist.push(JSON.stringify({ st, ans })); st = next; draw(); };
+  const back2 = () => { if (!hist.length) return closeSheet(); const h = JSON.parse(hist.pop()); st = h.st; ans = h.ans; draw(); };
+  const row = (r, extra = '') => `<button class="pick wz-row" data-open="${r.id}">${thumb(r, 'md')}<span class="info"><span class="t">${esc(r.title)}</span><span class="meta" style="margin-top:3px"><span>${esc(r.cuisine || '')}</span><span>${ic('clock', 13)}${fmtDur(r.time)}</span><span>${ic('flame', 13)}${r.kcal}</span></span>${extra}</span>${ic('chevron-right', 18)}</button>`;
+  const head = (title, sub = '') => `<div class="sec"><button class="icon" data-back aria-label="Назад">${ic('arrow-left', 22)}</button><h2 style="margin:0;flex:1">${title}</h2><button class="icon" data-close aria-label="Закрыть">${ic('x', 22)}</button></div>${sub ? `<div class="muted small" style="margin:2px 0 10px">${sub}</div>` : ''}`;
+  const big = (id, icon, t, s) => `<button class="wz-big" data-go="${id}"><span class="ib wish">${ic(icon, 26)}</span><b>${t}</b><span class="muted small">${s}</span></button>`;
+  const pickRand = () => { const pool = wzPool().filter(r => !lastRand || r.id !== lastRand.id); lastRand = pool[Math.floor(Math.random() * pool.length)]; return lastRand; };
+  const draw = () => {
+    let html = '';
+    if (st.v === 'start') html = head('Что хочется?', 'Не знаешь, что готовить? Сейчас разберёмся.') + `<div class="wz-grid">${big('surprise', 'sparkles', 'Удиви меня', 'Случайное блюдо из всей базы')}${big('know', 'whim', 'Примерно знаю', 'Подберу по описанию или по любимому блюду')}</div>`;
+    else if (st.v === 'know') html = head('Примерно знаю') + `<div class="wz-grid">${big('like', 'search', 'Похоже на…', 'Выбери блюдо, найду похожие из других кухонь')}${big('quiz', 'sliders-horizontal', 'Подобрать по вкусу', 'Пара вопросов: основа, вкус, форма, регион')}</div>`;
+    else if (st.v === 'surprise') {
+      const r = st.r;
+      const h = (window.HEROES || {})[r.id];
+      html = head('Удиви меня') + `<div class="wz-card">${h ? `<img class="wz-img" src="img/hero/${r.id}.webp" alt="">` : `<img class="wz-img ic" src="img/i256/${r.id}.webp" alt="">`}
+        <h2 style="margin:12px 0 2px">${esc(r.title)}</h2><div class="meta" style="margin-top:0"><span>${esc([r.cuisine, r.type].filter(Boolean).join(' · '))}</span><span>${ic('clock', 14)}${fmtDur(r.time)}</span><span>${ic('flame', 14)}${r.kcal} ккал</span></div>
+        <p class="muted" style="margin:10px 0 0">${esc(r.desc)}</p></div>
+        <div class="row" style="margin-top:14px"><button class="btn grow" data-reroll>${ic('refresh-cw', 18)} Ещё вариант</button><button class="btn pri grow" data-open="${r.id}">Открыть</button></div>
+        <button class="btn full ghost" style="margin-top:8px" data-plan="${r.id}">${ic('calendar-days', 18)} Сразу в план</button>`;
+    }
+    else if (st.v === 'like') {
+      const q = likeQ.toLowerCase();
+      const list = wzPool().filter(r => !q || (r.title + ' ' + (r.cuisine || '')).toLowerCase().includes(q)).sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+      html = head('Похоже на…', 'Выбери блюдо, которое нравится') + `<div class="searchbar" style="margin-bottom:6px"><div class="field">${ic('search', 18)}<input id="wq" placeholder="Название или кухня" value="${esc(likeQ)}"></div></div><div id="wlist">${list.map(r => `<button class="pick wz-row" data-like="${r.id}">${thumb(r, 'md')}<span class="info"><span class="t">${esc(r.title)}</span><span class="muted small">${esc(r.cuisine || '')}</span></span></button>`).join('')}</div>`;
+    }
+    else if (st.v === 'likeRes') {
+      const base = getRecipe(st.id);
+      html = head('Похоже на «' + esc(base.title) + '»', 'Тот же вкус и форма, по возможности из других кухонь') + similar(base, 10).map(r => row(r)).join('');
+    }
+    else if (st.v === 'q') {
+      const S_ = WZ_STEPS[st.i], opts = S_.opts(), cur = ans[S_.k];
+      html = head(S_.q, S_.hint || '') + `<div class="dots-step">${WZ_STEPS.map((_, i) => `<i class="${i < st.i ? 'done' : i === st.i ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="wz-opts">${opts.map(([k, n]) => `<button class="wz-opt ${S_.multi ? ((cur || []).includes(k) ? 'on' : '') : (cur === k ? 'on' : '')}" data-opt="${esc(k)}">${esc(n)}</button>`).join('')}</div>
+        <div class="row" style="margin-top:16px"><button class="btn grow" data-skip>Не уверен</button>${S_.multi ? `<button class="btn pri grow" data-next ${(cur || []).length ? '' : 'disabled'}>Дальше</button>` : ''}</div>
+        <button class="btn full ghost" style="margin-top:8px" data-finish>Показать, что уже подходит</button>`;
+    }
+    else if (st.v === 'res') {
+      const scored = wzPool().map(r => [wzScore(r, ans), r]);
+      const max = scored.length ? scored[0][0].max : 0;
+      const list = scored.filter(([s]) => !max || s.got > 0).sort((a, b) => (b[0].got - a[0].got) || a[1].title.localeCompare(b[1].title, 'ru')).slice(0, 25);
+      const full = list.filter(([s]) => s.got >= s.max - 1e-9);
+      const lbl = s => !s.max ? '' : s.got >= s.max - 1e-9 ? `<span class="small" style="color:var(--ok)">совпало всё</span>` : (s.got >= s.max - 0.5 ? `<span class="small" style="color:var(--accent)">почти всё совпало</span>` : `<span class="small muted">совпало частично</span>`);
+      html = head('Вот что подходит', max ? `Точных совпадений: ${full.length}` : 'Ты везде ответил «не уверен», так что вот всё подряд') +
+        (list.length ? `<button class="btn full" style="margin-bottom:8px" data-randres>${ic('sparkles', 18)} Выбери за меня из этих</button>` + list.map(([s, r]) => row(r, lbl(s))).join('') : `<div class="empty">Ничего не нашлось. Слишком привередливо — вернись и ответь «не уверен» хоть где-нибудь.</div>`);
+      st.list = list.filter(([s]) => s.got >= (full.length ? s.max - 1e-9 : 0)).map(([, r]) => r.id);
+    }
+    openSheet(html, () => {
+      const $$ = sel => document.querySelectorAll('#sheet ' + sel);
+      $$('[data-back]').forEach(b => b.onclick = back2);
+      $$('[data-close]').forEach(b => b.onclick = closeSheet);
+      $$('[data-go]').forEach(b => b.onclick = () => { const g = b.dataset.go; if (g === 'surprise') go2({ v: 'surprise', r: pickRand() }); else if (g === 'quiz') { ans = {}; go2({ v: 'q', i: 0 }); } else go2({ v: g }); });
+      $$('[data-open]').forEach(b => b.onclick = () => { closeSheet(); go('recipe', b.dataset.open); });
+      $$('[data-plan]').forEach(b => b.onclick = () => planSheet(b.dataset.plan));
+      $$('[data-reroll]').forEach(b => b.onclick = () => { st = { v: 'surprise', r: pickRand() }; draw(); });
+      $$('[data-like]').forEach(b => b.onclick = () => go2({ v: 'likeRes', id: b.dataset.like }));
+      const wq = $('#wq'); if (wq) wq.oninput = () => { likeQ = wq.value; const pos = wq.selectionStart; draw(); const n = $('#wq'); n.focus(); n.setSelectionRange(pos, pos); };
+      const step = WZ_STEPS[st.i];
+      const nextQ = () => st.i + 1 < WZ_STEPS.length ? go2({ v: 'q', i: st.i + 1 }) : go2({ v: 'res' });
+      $$('[data-opt]').forEach(b => b.onclick = () => {
+        const k = b.dataset.opt;
+        if (step.multi) { const a = ans[step.k] = ans[step.k] || []; const i = a.indexOf(k); i >= 0 ? a.splice(i, 1) : a.push(k); draw(); }
+        else { ans[step.k] = k; nextQ(); }
+      });
+      $$('[data-next]').forEach(b => b.onclick = nextQ);
+      $$('[data-skip]').forEach(b => b.onclick = () => { delete ans[step.k]; nextQ(); });
+      $$('[data-finish]').forEach(b => b.onclick = () => go2({ v: 'res' }));
+      $$('[data-randres]').forEach(b => b.onclick = () => { const ids = st.list.length ? st.list : wzPool().map(r => r.id); go2({ v: 'surprise', r: getRecipe(ids[Math.floor(Math.random() * ids.length)]) }); });
+    }, 'tall');
+  };
+  draw();
+}
 function filtersSheet() {
   const f = Object.assign({}, filters);
-  const cuisines = [...new Set(allRecipes().map(r => r.cuisine).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
+  const all = allRecipes();
+  const cnt = (pred) => all.filter(pred).length;
+  const regions = REGIONS.map(([n]) => n).filter(n => cnt(r => regionOf(r.cuisine || '') === n));
+  const cuisinesOf = reg => [...new Set(all.filter(r => regionOf(r.cuisine || '') === reg).map(r => r.cuisine).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
   const draw = () => openSheet(`<h2>Фильтры</h2>
     <label class="f">Сложность</label>
     <div class="chips">${[1, 2, 3].map(d => `<button class="chip ${f.diff === d ? 'on' : ''}" data-fd="${d}"><span class="dots">${diffDots(d)}</span> ${DIFF[d]}</button>`).join('')}</div>
     <label class="f">Время</label>
     <div class="chips">${[20, 30, 45, 60].map(t => `<button class="chip ${f.maxTime === t ? 'on' : ''}" data-ft="${t}">до ${t} мин</button>`).join('')}</div>
-    <label class="f">Кухня</label>
-    <div class="chips wrap">${cuisines.map(c => `<button class="chip ${f.cuisine === c ? 'on' : ''}" data-fc="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    <label class="f">Регион</label>
+    <div class="chips wrap">${regions.map(n => `<button class="chip ${f.region === n ? 'on' : ''}" data-fr="${esc(n)}">${esc(n)} <span class="small" style="opacity:.7">${cnt(r => regionOf(r.cuisine || '') === n)}</span></button>`).join('')}</div>
+    ${f.region ? `<label class="f">Кухня · ${esc(f.region)}</label>
+    <div class="chips wrap">${cuisinesOf(f.region).map(c => `<button class="chip ${f.cuisine === c ? 'on' : ''}" data-fc="${esc(c)}">${esc(c)} <span class="small" style="opacity:.7">${cnt(r => r.cuisine === c)}</span></button>`).join('')}</div>` : ''}
     <div class="row" style="margin-top:16px;position:sticky;bottom:0;background:var(--card);padding-top:8px">
       <button class="btn grow" id="fReset">Сбросить</button>
       <button class="btn pri grow" id="fOk">Показать ${filteredRecipes(f).length}</button>
     </div>`, () => {
       document.querySelectorAll('#sheet [data-fd]').forEach(b => b.onclick = () => { const d = +b.dataset.fd; f.diff = f.diff === d ? 0 : d; draw(); });
       document.querySelectorAll('#sheet [data-ft]').forEach(b => b.onclick = () => { const t = +b.dataset.ft; f.maxTime = f.maxTime === t ? 0 : t; draw(); });
+      document.querySelectorAll('#sheet [data-fr]').forEach(b => b.onclick = () => { f.region = f.region === b.dataset.fr ? '' : b.dataset.fr; f.cuisine = ''; draw(); });
       document.querySelectorAll('#sheet [data-fc]').forEach(b => b.onclick = () => { f.cuisine = f.cuisine === b.dataset.fc ? '' : b.dataset.fc; draw(); });
-      $('#fReset').onclick = () => { f.diff = 0; f.maxTime = 0; f.cuisine = ''; draw(); };
-      $('#fOk').onclick = () => { Object.assign(filters, { diff: f.diff, maxTime: f.maxTime, cuisine: f.cuisine }); closeSheet(); render(); };
+      $('#fReset').onclick = () => { f.diff = 0; f.maxTime = 0; f.region = ''; f.cuisine = ''; draw(); };
+      $('#fOk').onclick = () => { Object.assign(filters, { diff: f.diff, maxTime: f.maxTime, region: f.region, cuisine: f.cuisine }); closeSheet(); render(); };
     });
   draw();
 }
@@ -332,6 +464,7 @@ VIEWS.recipe = {
           </div>`).join('')}
       </div>
       ${r.notes ? `<div class="note">💡 ${esc(r.notes)}</div>` : ''}
+      ${(() => { const sim = similar(r, 8); return sim.length ? `<h3 style="margin-top:20px">Похожее на это</h3><div class="hscroll">${sim.map(x => `<button class="mini" data-rid="${x.id}">${thumb(x, '', true)}<span>${esc(x.title)}</span><span class="muted small">${esc(x.cuisine || '')}</span></button>`).join('')}</div>` : ''; })()}
       ${r.src && r.src.length ? `<div class="card"><h3 style="margin-top:0">Источники</h3>${r.src.map(s => `<div class="small"><a href="${esc(s[1])}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(s[0])}</a></div>`).join('')}</div>` : ''}
       <div class="row" style="margin-top:16px">
         <button class="btn grow" id="editR">${ic('pencil', 18)} Изменить</button>
@@ -347,6 +480,7 @@ VIEWS.recipe = {
     document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const n = +b.dataset.step; ui.done.has(n) ? ui.done.delete(n) : ui.done.add(n); render(); });
     document.querySelectorAll('[data-timer]').forEach(b => b.onclick = () => { const s = effSteps(r, ui.vars)[+b.dataset.timer]; startTimer(`${r.title}: ${s[0]}`, s[2]); });
     $('#toPlan').onclick = () => planSheet(id, { vars: ui.vars });
+    document.querySelectorAll('#view [data-rid]').forEach(b => b.onclick = () => go('recipe', b.dataset.rid));
     $('#editR').onclick = () => go('edit', id);
     $('#delR').onclick = () => confirmSheet(`Удалить «${r.title}»?`, 'Из плана он тоже пропадёт.', () => {
       if (window.SEED_RECIPES.some(x => x.id === id)) { S.deleted[id] = true; mark('d:' + id); }
@@ -631,8 +765,8 @@ VIEWS.pantry = {
     pq.oninput = () => { pantryQ = pq.value; const pos = pq.selectionStart; render(); const n = $('#pq'); n.focus(); n.setSelectionRange(pos, pos); };
     const add = () => { const v = pq.value.trim(); if (!v) return; if (!S.customProducts.includes(v) && !allProducts().includes(v)) { S.customProducts.push(v); mark('cp:' + v); } setHave(v, true); pantryQ = ''; save(); render(); toast(`«${v}» есть дома`); };
     $('#padd').onclick = add; pq.onkeydown = e => e.key === 'Enter' && add();
-    $('#cookFromPantry').onclick = () => { Object.assign(filters, { q: '', type: '', cuisine: '', diff: 0, maxTime: 0, have: true }); setTab('recipes'); };
-    document.querySelectorAll('[data-find]').forEach(b => b.onclick = () => { Object.assign(filters, { q: b.dataset.find, type: '', cuisine: '', diff: 0, maxTime: 0, have: false }); setTab('recipes'); toast(`Рецепты, где есть «${b.dataset.find}»`); });
+    $('#cookFromPantry').onclick = () => { Object.assign(filters, { q: '', type: '', region: '', cuisine: '', diff: 0, maxTime: 0, have: true }); setTab('recipes'); };
+    document.querySelectorAll('[data-find]').forEach(b => b.onclick = () => { Object.assign(filters, { q: b.dataset.find, type: '', region: '', cuisine: '', diff: 0, maxTime: 0, have: false }); setTab('recipes'); toast(`Рецепты, где есть «${b.dataset.find}»`); });
     document.querySelectorAll('[data-p]').forEach(b => b.onclick = ev => { if (ev.target.closest('[data-rm],[data-find]')) return; const p = b.dataset.p; setHave(p, !have(p)); save(); render(); });
     document.querySelectorAll('[data-iq]').forEach(b => b.onclick = () => { addQty(b.dataset.iq, 1); save(); render(); });
     document.querySelectorAll('[data-dq]').forEach(b => b.onclick = () => { addQty(b.dataset.dq, -1); save(); render(); });
@@ -810,7 +944,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
