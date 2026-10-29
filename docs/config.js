@@ -1,0 +1,1 @@
+window.ESURIO_CFG = {};

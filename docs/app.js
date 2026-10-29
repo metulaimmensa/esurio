@@ -1,5 +1,7 @@
 'use strict';
 /* ================= Хранилище ================= */
+const CFG = window.ESURIO_CFG || {};
+const MOM = !!CFG.mom;
 const KEY = 'kitchen.v1';
 const DEFAULT_STATE = {
   recipes: {},          // пользовательские и отредактированные рецепты (id -> recipe)
@@ -10,8 +12,8 @@ const DEFAULT_STATE = {
   extras: [],           // ручные позиции в списке покупок [{name, done}]
   settings: { people: 2, shopDays: 7 },
   timers: [],
-  profiles: [{ id: 's', name: 'Сергей', goal: 1800, share: 60 }, { id: 'j', name: 'Юля', goal: 1450, share: 40 }],
-  cook: { 0: 's', 1: 'j', 2: 'j', 3: 's', 4: 'j', 5: 's', 6: 'j' }, // день недели (0 = вс) -> кто готовит
+  profiles: MOM ? [{ id: 'm', name: 'Я', goal: 1800, share: 100 }] : [{ id: 's', name: 'Сергей', goal: 1800, share: 60 }, { id: 'j', name: 'Юля', goal: 1450, share: 40 }],
+  cook: MOM ? { 0: 'm', 1: 'm', 2: 'm', 3: 'm', 4: 'm', 5: 'm', 6: 'm' } : { 0: 's', 1: 'j', 2: 'j', 3: 's', 4: 'j', 5: 's', 6: 'j' }, // день недели (0 = вс) -> кто готовит
   cookOverride: {},     // 'YYYY-MM-DD' -> id профиля
   ts: {},               // метки времени изменений для синхронизации: ключ -> ms
   me: null,             // кто пользуется этим устройством (не синхронизируется)
@@ -21,6 +23,7 @@ function load() {
   try { S = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { S = {}; }
   for (const k in DEFAULT_STATE) if (S[k] === undefined) S[k] = JSON.parse(JSON.stringify(DEFAULT_STATE[k]));
   S.settings = Object.assign({}, DEFAULT_STATE.settings, S.settings);
+  if (MOM) { S.me = 'm'; if (S.settings._init !== 1) { S.settings.people = 1; S.settings._init = 1; } }
   // миграция: у старых записей нет id/даты
   S.extras = (S.extras || []).map(x => x.id ? x : Object.assign({ id: Math.random().toString(36).slice(2, 9) }, x));
   for (const d in S.plan) for (const e of S.plan[d]) e.date = d;
@@ -267,7 +270,7 @@ const WZ = {
 };
 const WZ_STEPS = [
   { k: 'b', q: 'Из чего?', opts: () => WZ.b },
-  { k: 't', q: 'Какой вкус?', multi: true, hint: 'Можно выбрать пару', opts: () => WZ.t },
+  { k: 't', q: 'Какой вкус?', multi: true, hint: 'Можно выбрать пару', opts: () => MOM ? WZ.t.filter(([k]) => k !== 'hot' && k !== 'sws') : WZ.t },
   { k: 'f', q: 'В какой форме?', opts: () => WZ.f },
   { k: 'region', q: 'Откуда родом?', opts: () => REGIONS.map(([n]) => [n, n]) },
   { k: 'time', q: 'Сколько есть времени?', opts: () => [['quick', 'Быстро, до 30 минут'], ['any', 'Есть время повозиться']] },
@@ -436,6 +439,7 @@ VIEWS.recipe = {
         ${r.tags.length ? `<div class="tags">${r.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>` : ''}
       </div>
       ${r.desc ? `<p class="muted">${esc(r.desc)}</p>` : ''}
+      ${r.mom_note ? `<div class="note" style="margin-bottom:10px">${esc(r.mom_note)}</div>` : ''}
       ${hasVars(r) ? `<div class="card"><h3 style="margin-top:0">${r.pick_one ? 'Вариант' : 'Добавки по желанию'}</h3>${varChips(r, ui.vars, 'data-var')}${varNotes}</div>` : ''}
       <div class="stats">
         <div class="stat"><b>${nut.kcal}</b><span>ккал/порц</span></div>
@@ -576,7 +580,7 @@ function dayTotals(d) {
 function bars(d) {
   const t = dayTotals(d);
   return `<div class="ppl">${S.profiles.map(p => { const v = t[p.id], left = p.goal - v.kcal; return `
-    <div class="pbar"><div class="top"><span><b>${esc(p.name)}</b>${p.id === S.me ? ' <span class="muted">(я)</span>' : ''}</span><span><b>${v.kcal}</b> <span class="muted">/ ${p.goal} ккал</span></span></div>
+    <div class="pbar"><div class="top"><span><b>${MOM ? 'Калории за день' : esc(p.name)}</b>${!MOM && p.id === S.me ? ' <span class="muted">(я)</span>' : ''}</span><span><b>${v.kcal}</b> <span class="muted">/ ${p.goal} ккал</span></span></div>
     <div class="bar ${v.kcal > p.goal ? 'over' : ''}"><div style="width:${Math.min(100, v.kcal / p.goal * 100)}%"></div></div>
     <div class="top small"><span class="muted">Б ${v.p} · Ж ${v.f} · У ${v.c}</span><span style="color:${left < 0 ? 'var(--bad)' : 'var(--ok)'}">${left >= 0 ? 'ещё ' + left : 'перебор ' + (-left)}</span></div></div>`; }).join('')}</div>`;
 }
@@ -590,10 +594,10 @@ VIEWS.plan = {
     return `
       <div class="week">${days.map(d => {
         const dt = new Date(d + 'T12:00:00');
-        return `<button class="day ${d === planDay ? 'on' : ''} ${(S.plan[d] || []).length ? 'has' : ''} ${d < today ? 'past' : ''}" data-day="${d}">${WD[dt.getDay()]}<b>${dt.getDate()}</b><span class="ck">${esc(prof(cookOf(d)).name[0])}</span><i></i></button>`;
+        return `<button class="day ${d === planDay ? 'on' : ''} ${(S.plan[d] || []).length ? 'has' : ''} ${d < today ? 'past' : ''}" data-day="${d}">${WD[dt.getDay()]}<b>${dt.getDate()}</b>${MOM ? '' : `<span class="ck">${esc(prof(cookOf(d)).name[0])}</span>`}<i></i></button>`;
       }).join('')}</div>
       <div class="card">
-        <div class="row" style="justify-content:space-between"><b>${dayLabel(planDay)}</b><button class="chip" id="cookBtn">${ic('chef-hat', 16)} готовит ${esc(ck.name)}${S.cookOverride[planDay] ? ' ✎' : ''}</button></div>
+        <div class="row" style="justify-content:space-between"><b>${dayLabel(planDay)}</b><button class="chip ${MOM ? 'hidden' : ''}" id="cookBtn">${ic('chef-hat', 16)} готовит ${esc(ck.name)}${S.cookOverride[planDay] ? ' ✎' : ''}</button></div>
         ${bars(planDay)}
         ${planDay < today ? '<div class="small" style="margin-top:6px;color:var(--accent)">Прошедший день. Добавь, что ели, и жми ✓ — продукты спишутся со склада.</div>' : ''}
         ${entries.length ? '' : '<div class="small muted" style="margin-top:6px">Пусто. Голодать не планировали?</div>'}
@@ -605,7 +609,7 @@ VIEWS.plan = {
             <div class="pe ${e.done ? 'done' : ''}">
               ${thumb(r, 'sm')}
               <button class="grow" style="text-align:left" data-open="${r.id}"><div class="ttl">${esc(r.title)}</div>
-                ${hasVars(r) && cleanVars(r, e.vars).length ? `<div class="small" style="color:var(--accent)">${esc(varLabel(r, e.vars))}</div>` : ''}<div class="muted small">${e.portions} порц. · ${S.profiles.map(p => esc(p.name[0]) + ' ' + Math.round(entryKcal(e, r, p.id))).join(' / ')} ккал${e.split ? ' · ' + S.profiles.map(p => e.split[p.id]).join('/') : ''}</div></button>
+                ${hasVars(r) && cleanVars(r, e.vars).length ? `<div class="small" style="color:var(--accent)">${esc(varLabel(r, e.vars))}</div>` : ''}<div class="muted small">${e.portions} порц. · ${MOM ? Math.round(entryKcal(e, r, S.profiles[0].id)) : S.profiles.map(p => esc(p.name[0]) + ' ' + Math.round(entryKcal(e, r, p.id))).join(' / ')} ккал${e.split ? ' · ' + S.profiles.map(p => e.split[p.id]).join('/') : ''}</div></button>
               <button class="ck" data-cook="${e.id}" title="${e.done ? 'Отменить «приготовлено»' : 'Приготовлено'}" aria-label="Приготовлено">${ic('check', 20)}</button>
               <button class="btn sm ghost sq" data-edit="${e.id}" aria-label="Изменить">${ic('ellipsis', 20)}</button>
             </div>`; }).join('') || `<button class="addline" data-add="${slot}">${ic('plus', 16)} Добавить</button>`}
@@ -798,7 +802,7 @@ function planSheet(rid, preset = {}) {
     openSheet(`
     <h2>${esc(r.title)} — в план</h2>
     ${hasVars(r) ? `<label class="f">${r.pick_one ? 'Вариант' : 'Добавки по желанию'}</label>${varChips(r, vars, 'data-v')}` : ''}
-    <label class="f">День</label><div class="chips">${week().map(d => `<button class="chip ${d === day ? 'on' : ''}" data-d="${d}">${dayLabel(d)} · ${esc(prof(cookOf(d)).name[0])}</button>`).join('')}</div>
+    <label class="f">День</label><div class="chips">${week().map(d => `<button class="chip ${d === day ? 'on' : ''}" data-d="${d}">${dayLabel(d)}${MOM ? '' : ' · ' + esc(prof(cookOf(d)).name[0])}</button>`).join('')}</div>
     <label class="f">Приём пищи</label><div class="chips">${SLOTS.map(s => `<button class="chip ${s === slot ? 'on' : ''}" data-s="${s}">${s}</button>`).join('')}</div>
     <label class="f">Сколько порций готовим</label>
     <div class="serv"><button id="pm" aria-label="Меньше">${ic('minus', 18)}</button><b>${portions}</b><span class="muted small grow">${S.profiles.map(p => esc(p.name) + ' ≈ ' + Math.round(entryKcal(e, r, p.id))).join(', ')} ккал</span><button id="pp" aria-label="Больше">${ic('plus', 18)}</button></div>
@@ -845,7 +849,7 @@ function pickRecipeSheet(day, slot) {
   };
   openSheet(`<div class="stick">
       <div class="sec"><h2 style="margin:0">${slot} · ${dayLabel(day)}</h2><button class="icon" id="pClose" aria-label="Закрыть">${ic('x', 22)}</button></div>
-      <div class="muted small" style="margin:2px 0 8px">${esc(me.name)}, осталось <b style="color:${left < 0 ? 'var(--bad)' : 'var(--ok)'}">${left} ккал</b> (твоя доля ${Math.round(share * 100)}%)</div>
+      <div class="muted small" style="margin:2px 0 8px">${MOM ? 'Осталось' : esc(me.name) + ', осталось'} <b style="color:${left < 0 ? 'var(--bad)' : 'var(--ok)'}">${left} ккал</b>${MOM ? '' : ` (твоя доля ${Math.round(share * 100)}%)`}</div>
       <div class="searchbar"><div class="field">${ic('search', 18)}<input id="pq" placeholder="Поиск блюда или продукта" enterkeyhint="search"></div></div>
       <div class="chips" id="pchips" style="margin-top:8px">${chips()}</div>
     </div>
@@ -863,8 +867,8 @@ function entrySheet(day, eid) {
     ${hasVars(r) ? `<label class="f">${r.pick_one ? 'Вариант' : 'Добавки по желанию'}</label>${varChips(r, e.vars, 'data-v')}` : ''}
     <label class="f">Порций готовим</label>
     <div class="serv"><button id="pm" aria-label="Меньше">${ic('minus', 18)}</button><b>${e.portions}</b><button id="pp" aria-label="Больше">${ic('plus', 18)}</button></div>
-    <label class="f">Кто сколько ест: ${S.profiles.map(p => esc(p.name) + ' ' + Math.round(entryKcal(e, r, p.id)) + ' ккал').join(', ')}</label>
-    <div class="chips wrap">${SPLITS().map(([n, sp], i) => `<button class="chip ${JSON.stringify(e.split || null) === JSON.stringify(sp) ? 'on' : ''}" data-sp="${i}">${esc(n)}</button>`).join('')}</div>
+    ${MOM ? '' : `<label class="f">Кто сколько ест: ${S.profiles.map(p => esc(p.name) + ' ' + Math.round(entryKcal(e, r, p.id)) + ' ккал').join(', ')}</label>
+    <div class="chips wrap">${SPLITS().map(([n, sp], i) => `<button class="chip ${JSON.stringify(e.split || null) === JSON.stringify(sp) ? 'on' : ''}" data-sp="${i}">${esc(n)}</button>`).join('')}</div>`}
     <label class="f">Перенести на</label><div class="chips">${week().map(d => `<button class="chip ${d === day ? 'on' : ''}" data-mv="${d}">${dayLabel(d)}</button>`).join('')}</div>
     <div class="row" style="margin-top:16px"><button class="btn danger grow" id="eDel">Убрать из плана</button><button class="btn pri grow" id="eOk">Готово</button></div>`, () => {
       document.querySelectorAll('#sheet [data-v]').forEach(b => b.onclick = () => { e.vars = toggleVar(r, e.vars, +b.dataset.v); ch(); });
@@ -892,20 +896,20 @@ function settingsSheet() {
     <h3>Тема</h3>
     <div class="themes">${THEMES.map(([id, n, c]) => `<button class="th ${curTheme() === id ? 'on' : ''}" data-th="${id}"><div class="sw">${c.map(x => `<i style="background:${x}"></i>`).join('')}</div>${esc(n)}</button>`).join('')}</div>
     <div class="muted small" style="margin-top:6px">Тема своя на каждом устройстве.</div>
-    <h3>Это устройство</h3>
+    ${MOM ? `<h3>Калории</h3><label class="f">Цель на день, ккал</label><input id="pg0" type="number" inputmode="numeric" value="${S.profiles[0].goal}">` : `<h3>Это устройство</h3>
     <div class="row">${S.profiles.map(p => `<button class="btn ${S.me === p.id ? 'pri' : ''} grow" data-me="${p.id}">Я — ${esc(p.name)}</button>`).join('')}</div>
     <h3>Профили</h3>
     ${S.profiles.map((p, i) => `<div class="row" style="margin-top:6px"><input id="pn${i}" value="${esc(p.name)}" style="flex:2"><input id="pg${i}" type="number" inputmode="numeric" value="${p.goal}" title="ккал" style="flex:1.3"><input id="ps${i}" type="number" inputmode="numeric" value="${p.share}" title="доля %" style="flex:1"></div>`).join('')}
-    <div class="muted small">Имя · цель, ккал в день · доля в общей порции, %</div>
+    <div class="muted small">Имя · цель, ккал в день · доля в общей порции, %</div>`}
     <label class="f">Порций по умолчанию при добавлении блюда</label><input id="sPpl" type="number" inputmode="numeric" value="${S.settings.people}">
-    <h3>Кто готовит</h3>
-    ${order.map(d => `<div class="row" style="justify-content:space-between;margin:4px 0"><span>${WDN[d]}</span><div class="row">${S.profiles.map(p => `<button class="chip ${S.cook[d] === p.id ? 'on' : ''}" data-ck="${d}:${p.id}">${esc(p.name)}</button>`).join('')}</div></div>`).join('')}
+    ${MOM ? '' : `<h3>Кто готовит</h3>`}
+    ${MOM ? '' : order.map(d => `<div class="row" style="justify-content:space-between;margin:4px 0"><span>${WDN[d]}</span><div class="row">${S.profiles.map(p => `<button class="chip ${S.cook[d] === p.id ? 'on' : ''}" data-ck="${d}:${p.id}">${esc(p.name)}</button>`).join('')}</div></div>`).join('')}
     <button class="btn pri full" id="sSave" style="margin-top:12px">Сохранить</button>
-    <h3>Синхронизация</h3>
+    ${MOM ? '' : `<h3>Синхронизация</h3>
     <p class="muted small">Общий план, склад и покупки хранятся в приватном репозитории <b>${Sync.repo}</b>. Вставь токен GitHub с доступом только к нему (Contents: Read and write). Токен хранится только на этом устройстве.</p>
     <input id="sTok" type="password" placeholder="github_pat_…" value="${esc(Sync.token())}" autocomplete="off">
     <div class="row" style="margin-top:8px"><button class="btn grow" id="sTokSave">Сохранить токен</button><button class="btn grow" id="sNow">${ic('refresh-cw', 18)} Синхронизировать</button></div>
-    <div class="muted small" style="margin-top:6px" id="sStat">${esc(Sync.statusText())}</div>
+    <div class="muted small" style="margin-top:6px" id="sStat">${esc(Sync.statusText())}</div>`}
     <h3>Резервная копия</h3>
     <div class="row"><button class="btn grow" id="sExp">${ic('upload', 18)} Скопировать всё</button><button class="btn grow" id="sExpR">${ic('upload', 18)} Только рецепты</button></div>
     <textarea id="sImp" placeholder="Вставь JSON сюда…" style="margin-top:8px;min-height:90px"></textarea>
@@ -919,11 +923,11 @@ function settingsSheet() {
       document.querySelectorAll('#sheet [data-th]').forEach(b => b.onclick = () => { const y = $('#sheet .sheet-body').scrollTop; setTheme(b.dataset.th); settingsSheet(); $('#sheet .sheet-body').scrollTop = y; });
       document.querySelectorAll('#sheet [data-ck]').forEach(b => b.onclick = () => { const [d, id] = b.dataset.ck.split(':'); S.cook[d] = id; mark('cfg:cook'); save(); settingsSheet(); render(); });
       $('#sSave').onclick = () => {
-        S.profiles.forEach((p, i) => { p.name = $('#pn' + i).value.trim() || p.name; p.goal = Math.max(500, +$('#pg' + i).value || p.goal); p.share = Math.max(0, +$('#ps' + i).value || 0); });
+        S.profiles.forEach((p, i) => { if ($('#pn' + i)) p.name = $('#pn' + i).value.trim() || p.name; p.goal = Math.max(500, +$('#pg' + i).value || p.goal); if ($('#ps' + i)) p.share = Math.max(0, +$('#ps' + i).value || 0); });
         mark('cfg:profiles'); S.settings.people = Math.max(1, +$('#sPpl').value || 2); save(); closeSheet(); render(); toast('Сохранено');
       };
-      $('#sTokSave').onclick = () => { Sync.setToken($('#sTok').value.trim()); toast('Токен сохранён'); Sync.run(); };
-      $('#sNow').onclick = () => Sync.run(true);
+      if ($('#sTokSave')) $('#sTokSave').onclick = () => { Sync.setToken($('#sTok').value.trim()); toast('Токен сохранён'); Sync.run(); };
+      if ($('#sNow')) $('#sNow').onclick = () => Sync.run(true);
       $('#sExp').onclick = () => copyText(JSON.stringify({ esurio: 1, ...S, timers: [], me: undefined }));
       $('#sExpR').onclick = () => copyText(JSON.stringify({ esurio: 1, recipes: Object.fromEntries(allRecipes().map(r => [r.id, r])) }));
       $('#sImpB').onclick = () => {
@@ -950,7 +954,7 @@ const SITE = 'https://metulaimmensa.github.io/esurio/';
 async function checkUpdate() {
   if (!isNative) return;
   try {
-    const v = await (await fetch(SITE + 'version.json?t=' + Date.now(), { cache: 'no-store' })).json();
+    const v = await (await fetch(SITE + (CFG.versionPath || 'version.json') + '?t=' + Date.now(), { cache: 'no-store' })).json();
     const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
     if (newer(v.version, APP_VERSION)) openSheet(`<h2>Вышла Esurio ${esc(v.version)}</h2><p class="muted">${esc(v.notes || '')}</p><a class="btn pri full" href="${SITE + v.apk}" target="_blank" rel="noopener">Скачать APK</a><button class="btn full" style="margin-top:8px" id="updLater">Потом</button>`, () => { $('#updLater').onclick = closeSheet; });
   } catch (e) { }
@@ -1026,6 +1030,7 @@ const Sync = (() => {
     return last ? 'Синхронизировано в ' + new Date(last).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Ещё не синхронизировалось.';
   }
   async function run(manual) {
+    if (MOM) return;
     if (!token()) { if (manual) toast('Сначала вставь токен'); return; }
     if (busy) { again = true; return; }
     busy = true; err = ''; setStatus();
