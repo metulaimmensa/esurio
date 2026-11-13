@@ -126,12 +126,16 @@ const ingName = i => i[0], ingAmt = i => +i[1] || 0, ingUnit = i => i[2] || '', 
 /* ---- варианты: pick_one — ровно один на выбор, иначе — добавки по желанию ---- */
 const hasVars = r => !!(r && r.variants && r.variants.length);
 const defaultVars = r => (r && r.default_vars) ? r.default_vars.slice() : (r && r.pick_one && hasVars(r)) ? [0] : [];
-function cleanVars(r, vars) { const v = (vars || []).filter(i => hasVars(r) && r.variants[i]); return (r && r.pick_one && hasVars(r) && !v.length) ? [0] : v; }
+const isAddon = (r, i) => !!(r.variants[i] && r.variants[i].addon); // добавка поверх выбранного варианта
+function cleanVars(r, vars) { const v = (vars || []).filter(i => hasVars(r) && r.variants[i]); return (r && r.pick_one && hasVars(r) && !v.some(i => !isAddon(r, i))) ? [0, ...v] : v; }
 function effIng(r, vars) {
   const vs = cleanVars(r, vars).map(i => r.variants[i]);
   const minus = new Set(vs.flatMap(v => v.minus || []));
   let ing = r.ing.filter(i => !minus.has(ingName(i)));
   vs.forEach(v => { ing = ing.concat(v.ing || []); });
+  // swap: вариант подменяет продукт (например, бульон на гусиный), количество остаётся
+  const swap = Object.assign({}, ...vs.map(v => v.swap || {}));
+  if (Object.keys(swap).length) ing = ing.map(i => swap[ingName(i)] ? [swap[ingName(i)], ingAmt(i), ingUnit(i), { ...ingOpt(i), note: 'вместо: ' + ingName(i).toLowerCase() }] : i);
   return ing;
 }
 function effNut(r, vars) {
@@ -148,13 +152,13 @@ function missing(r, vars) {
 const varLabel = (r, vars) => cleanVars(r, vars).map(i => r.variants[i].name).join(', ');
 function toggleVar(r, vars, i) {
   vars = cleanVars(r, vars);
-  if (r.pick_one) return [i];
+  if (r.pick_one && !isAddon(r, i)) return [i, ...vars.filter(x => isAddon(r, x))].sort((a, b) => a - b);
   return vars.includes(i) ? vars.filter(x => x !== i) : [...vars, i].sort((a, b) => a - b);
 }
 function varChips(r, vars, attr) {
   if (!hasVars(r)) return '';
   vars = cleanVars(r, vars);
-  return `<div class="chips wrap">${r.variants.map((v, i) => `<button class="chip ${vars.includes(i) ? 'on' : ''}" ${attr}="${i}">${r.pick_one ? '' : (vars.includes(i) ? '✓ ' : '＋ ')}${esc(v.name.replace(/^\+ /, ''))}${v.dkcal ? ` <span class="small">${v.dkcal > 0 ? '+' : ''}${v.dkcal}</span>` : ''}</button>`).join('')}</div>`;
+  return `<div class="chips wrap">${r.variants.map((v, i) => `<button class="chip ${vars.includes(i) ? 'on' : ''}" ${attr}="${i}">${r.pick_one && !v.addon ? '' : (vars.includes(i) ? '✓ ' : '＋ ')}${esc(v.name.replace(/^\+ /, ''))}${v.dkcal ? ` <span class="small">${v.dkcal > 0 ? '+' : ''}${v.dkcal}</span>` : ''}</button>`).join('')}</div>`;
 }
 
 /* ================= Навигация ================= */
@@ -948,7 +952,7 @@ function settingsSheet() {
 /* ================= Синхронизация через приватный репозиторий GitHub =================
    Всё общее состояние раскладывается в плоскую карту «ключ -> {v, ts}».
    При слиянии по каждому ключу побеждает более свежая метка. Удаление = запись с v:null. */
-const APP_VERSION = '2.1.2';
+const APP_VERSION = '2.1.3';
 const SITE = 'https://metulaimmensa.github.io/esurio/';
 // в APK раз в запуск проверяем, не вышла ли новая версия на сайте
 async function checkUpdate() {
