@@ -56,7 +56,7 @@ const SLOTS = ['Завтрак', 'Обед', 'Ужин', 'Перекус'];
 const DIFF = ['', 'легко', 'средне', 'сложно'];
 const diffDots = d => '●'.repeat(d) + '○'.repeat(3 - d);
 const canon = n => (window.PRODUCT_ALIASES[n] || n).trim();
-const ICON_IDS = new Set((window.SEED_RECIPES || []).map(r => r.id));
+const ICON_IDS = new Set(window.ICON_IDS || []);
 const thumb = (r, cls = '', big = false) => ICON_IDS.has(r.id) ? `<img class="thumb ${cls}" src="img/${big ? 'i256' : 'i64'}/${r.id}.webp" alt="" loading="lazy" decoding="async">` : `<div class="thumb ${cls}">${esc(r.emoji)}</div>`;
 const THEMES = [
   ['olive-cream', 'Olive & Cream', ['#171C18', '#A4B58C', '#C28B61']],
@@ -314,7 +314,7 @@ function wishSheet() {
     else if (st.v === 'surprise') {
       const r = st.r;
       const h = (window.HEROES || {})[r.id];
-      html = head('Удиви меня') + `<div class="wz-card">${h ? `<img class="wz-img" src="img/hero/${r.id}.webp" alt="">` : `<img class="wz-img ic" src="img/i256/${r.id}.webp" alt="">`}
+      html = head('Удиви меня') + `<div class="wz-card">${h ? `<img class="wz-img" src="img/hero/${r.id}.webp" alt="">` : ICON_IDS.has(r.id) ? `<img class="wz-img ic" src="img/i256/${r.id}.webp" alt="">` : `<div class="wz-img ic" style="font-size:96px;text-align:center">${esc(r.emoji)}</div>`}
         <h2 style="margin:12px 0 2px">${esc(r.title)}</h2><div class="meta" style="margin-top:0"><span>${esc([r.cuisine, r.type].filter(Boolean).join(' · '))}</span><span>${ic('clock', 14)}${fmtDur(r.time)}</span><span>${ic('flame', 14)}${r.kcal} ккал</span></div>
         <p class="muted" style="margin:10px 0 0">${esc(r.desc)}</p></div>
         <div class="row" style="margin-top:14px"><button class="btn grow" data-reroll>${ic('refresh-cw', 18)} Ещё вариант</button><button class="btn pri grow" data-open="${r.id}">Открыть</button></div>

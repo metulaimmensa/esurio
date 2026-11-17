@@ -31,8 +31,10 @@ for r in allr:
 cats = {k: v['cat'] for k, v in N.items()}
 cats.update({'Лимон (цедра)': 'Овощи и фрукты', 'Масло подсолнечное': 'Бакалея', 'Сметана или варенье к подаче': 'Молочное', 'Вода ледяная': 'Специи'})
 aliases = {'Яйцо (нужны желтки)': 'Яйцо', 'Яйцо (нужен желток)': 'Яйцо', 'Желток': 'Яйцо', 'Масло подсолнечное': 'Масло растительное'}
+icons = sorted(f[:-5] for f in os.listdir(os.path.join(HERE, '..', 'docs', 'img', 'i256')) if f.endswith('.webp'))
 js = ('// Сгенерировано из data/*.py — правки вносить туда.\n'
       'window.SEED_RECIPES = ' + json.dumps(allr, ensure_ascii=False, indent=0) + ';\n'
+      'window.ICON_IDS = ' + json.dumps(icons, ensure_ascii=False) + ';\n'
       'window.PRODUCT_CATS = ' + json.dumps(cats, ensure_ascii=False) + ';\n'
       'window.PRODUCT_ALIASES = ' + json.dumps(aliases, ensure_ascii=False) + ';\n')
 open(os.path.join(HERE, '..', 'docs', 'recipes.js'), 'w').write(js)

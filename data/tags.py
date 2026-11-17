@@ -105,5 +105,7 @@ T = {
  'syrniki': ('eg vg', 'sweet cream', 'fry'),
  'kotlety': ('pk bf', 'cream umami', 'fry'),
  'potato-honey-parm': ('vg', 'sweet umami', 'fry'),
+ 'zereshk-polo': ('ch', 'sour fruit spice', 'rice'),
+ 'bulgogi': ('bf', 'sws umami', 'fry rice'),
 }
 TAGS = {k: {'b': b.split(), 't': t.split(), 'f': f.split()} for k, (b, t, f) in T.items()}
